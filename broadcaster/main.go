@@ -23,14 +23,14 @@ func main() {
 	log.Printf("Listening on %s:%d\n", shared.Hostname, shared.Port)
 
 	server = NewServer(conn)
-
+	
 	for {
 		peer, err := server.Read()
 		if err != nil {
 			log.Printf("ERROR: couldn't read from %s: %s\n", peer, err)
 		}
-		log.Println("New peer connected!")
-		go handlePeer(peer)
+		
+		go handlePeer(peer)	
 	}
 }
 
@@ -45,11 +45,13 @@ func handlePeer(p *Peer) {
 	}
 
 	switch shared.MessageType(typ) {
-	case shared.GetPeers:
+	case shared.GetPeersMessage:
 		res := server.PeersString()
 		p.pakt.Flush()
 		p.pakt.WriteString(res)
 		server.Send(p.pakt.GetBytes(), p.String())
+	case shared.PingMessage:
+		p.ping <- struct{}{} 
 	default:
 		// TODO: Handle Invalid Message Type
 	}

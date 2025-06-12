@@ -6,15 +6,42 @@ import (
 	"p2p/shared"
 	"strconv"
 	"time"
+	"strings"
+	"flag"
+	"os"
+	"bufio"
 )
 
 func main() {
+	port := flag.Uint("port", 8080, "Peer tcp port")
+	flag.Parse()
+
+	peersChan := make(chan string)	
+	go broadcast(peersChan)
+
+	peers := strings.Split(<-peersChan, " ")
+	
+	_, err := NewPeer(uint16(*port), peers)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// stdReader := bufio.NewReader(os.Stdin)
+	// for {
+	// 	peer.Read()	
+	// }
+}
+
+func broadcast(peers chan string) {
 	addr := net.JoinHostPort(shared.Hostname, strconv.Itoa(shared.Port))
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		log.Println("Disconnected.")
+	}()
 
 	log.Println("Connected to broadcaster")
 
@@ -25,16 +52,15 @@ func main() {
 		buff := make([]byte, 1024)
 		nbr, err := conn.Read(buff)
 		if err != nil {
-			log.Fatal("1", err)
+			log.Fatal(err)
 		}
 		pakt.Load(buff[:nbr])
 		str, err := pakt.ReadString()
 		if err != nil {
-			log.Fatal("2", err)
+			log.Fatal(err)
 		}
 		pakt.Flush()
-
-		log.Println("Retreived peers", str)
+		peers <- str
 	}()
 
 	pakt := shared.NewPacket(addr)
@@ -48,6 +74,5 @@ func main() {
 			log.Printf("Failed to send message: %s\n", err)
 			break
 		}
-		log.Println("hello")
 	}
 }

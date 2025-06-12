@@ -4,23 +4,25 @@ import (
 	"net"
 	"fmt"
 	"slices"
+	"p2p/shared"
 )
 
 type Peer struct {
 	port uint16
 	peers []string 
-	listener *net.Listener
+	list net.Listener
+	cons map[string]*net.Conn
 }
 
 func NewPeer(port uint16, peers []string) (*Peer, error) {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	list, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
 	return &Peer{
 		port: port,
 		peers: peers,
-		listener: &listener,
+		list: list,
 	}, nil
 }
 
@@ -39,3 +41,12 @@ func (p *Peer) Send(data []byte, to string) (int, error) {
 	}
 	return nbw, nil
 }
+
+// func (p *Peer) Read() (*shared.Packet, error) {
+// 	conn, err := p.list.Accept()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	addr := conn.RemoteAddr().String()
+// 	if !slices.Contains
+// }
