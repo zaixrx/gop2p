@@ -1,113 +1,83 @@
-package main 
+package main
 
 import (
 	"fmt"
-	"net"
-	"p2p/shared"
-	"strings"
-	"sync"
-	"time"
 	"log"
+	"net"
+	"sync"
+	"p2p/shared"
 )
 
-type Peer struct {
-	mux sync.Mutex
-	ping chan struct{}
-	pakt *shared.Packet
-	addr *net.UDPAddr
-}
-
-func (p *Peer) String() string {
-	return p.addr.String()
-}
-
-func NewPeer(addr *net.UDPAddr) *Peer {
-	return &Peer{
-		addr: addr,
-		ping: make(chan struct{}),
-		pakt: shared.NewPacket(addr.String()),
-	}
-}
+type MessageHandler func(*shared.Packet, *net.UDPAddr, *Server) error 
 
 type Server struct {
 	mux sync.Mutex
 	conn *net.UDPConn
-	peers map[string]*Peer
+	pools map[string]*Pool
+	handler map[shared.MessageType]MessageHandler 
 }
 
 func NewServer(conn *net.UDPConn) *Server {
 	return &Server{
 		conn: conn,
-		peers: make(map[string]*Peer),
+		pools: make(map[string]*Pool), 
+		handler: map[shared.MessageType]MessageHandler {
+			shared.MessageJoinPool: HandlePoolJoinMessage,
+			shared.MessageLeavePool: HandlePoolLeaveMessage,
+			shared.MessageCreatePool: HandlePoolCreateMessage,
+			shared.MessageDeletePool: HandlePoolDeleteMessage,
+			shared.MessageRetreivePools: HandlePoolRetreivalMessage,
+		},
 	}
 }
 
-func (s *Server) Read() (*Peer, error) {
+func (s *Server) Listen() error {
 	buff := make([]byte, 1024)
 	n, addr, err := s.conn.ReadFromUDP(buff)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	p, ok := s.peers[addr.String()]
-	if !ok {
-		p = s.addPeer(addr)
+
+	if n == 0 {
+		log.Printf("Recevied empty buffer\n")
+		return nil
 	}
-	p.pakt.Load(buff[:n])
-	return p, nil
-}
 
-func (s *Server) Send(dat []byte, to string) (int, error) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	peer, found := s.peers[to];
-	if !found {
-		return 0, fmt.Errorf("ERROR: peer with id %s isn't found\n", to)
+	err = s.handleMessage(buff[:n], addr)
+	if err != nil {
+		return err
 	}
-	return s.conn.WriteTo(dat, peer.addr)
-}
 
-func (s *Server) addPeer(addr *net.UDPAddr) *Peer {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	peer := NewPeer(addr)
-	s.peers[peer.String()] = peer 
-
-	go func() {
-		for { 
-			select {
-			case <-time.After(shared.MaxPingTimeout * time.Second):
-				s.removePeer(peer.String())
-				return
-			case <-peer.ping:
-			}
-		}
-	}()
-	
-	return peer
-}
-
-func (s *Server) removePeer(id string) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	if _, ok := s.peers[id]; !ok {
-		return fmt.Errorf("ERROR: cannot delete non existing peer\n")
-	}
-	delete(s.peers, id)
-	log.Printf("%s disconnected\n", id)
 	return nil
 }
 
-func (s *Server) PeersString() string {
-	var (
-		keys = make([]string, len(s.peers))
-		i = 0
-	)
-	for key := range s.peers {
-		keys[i] = key
-		i++
+func (s *Server) Write(b []byte, a *net.UDPAddr) (int, error) {
+	return s.conn.WriteToUDP(b, a)
+}
+
+func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
+	packet := shared.NewPacket()
+	packet.Load(dat)
+
+	msgTyp, err := packet.ReadByte()
+	if err != nil {
+		return err
 	}
-	return strings.Join(keys, " ")
+
+	log.Printf("Received message %d from %s\n", msgTyp, addr.String())
+
+	handler, ok := s.handler[shared.MessageType(msgTyp)]
+	if !ok {
+		return fmt.Errorf("ERROR: unknown message type")
+	}
+
+	return handler(packet, addr, s)
+}
+
+func (s *Server) GetPool(id string) (*Pool, error) {
+	pool, ok := s.pools[id]
+	if !ok {
+		return nil, fmt.Errorf("ERROR: pool with id %s doesn't exist", id)
+	}
+	return pool, nil 
 }

@@ -25,34 +25,9 @@ func main() {
 	server = NewServer(conn)
 	
 	for {
-		peer, err := server.Read()
+		err := server.Listen()
 		if err != nil {
-			log.Printf("ERROR: couldn't read from %s: %s\n", peer, err)
+			log.Println(err)
 		}
-		
-		go handlePeer(peer)	
-	}
-}
-
-func handlePeer(p *Peer) {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-
-	typ, err := p.pakt.ReadByte()
-
-	if err != nil {
-		return
-	}
-
-	switch shared.MessageType(typ) {
-	case shared.GetPeersMessage:
-		res := server.PeersString()
-		p.pakt.Flush()
-		p.pakt.WriteString(res)
-		server.Send(p.pakt.GetBytes(), p.String())
-	case shared.PingMessage:
-		p.ping <- struct{}{} 
-	default:
-		// TODO: Handle Invalid Message Type
 	}
 }

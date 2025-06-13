@@ -1,78 +1,97 @@
 package main
 
 import (
+	"p2p/shared"
+	"strings"
+	"strconv"
+	"bufio"
 	"log"
 	"net"
-	"p2p/shared"
-	"strconv"
-	"time"
-	"strings"
-	"flag"
 	"os"
-	"bufio"
 )
 
-func main() {
-	port := flag.Uint("port", 8080, "Peer tcp port")
-	flag.Parse()
+type ActionHandler func() error
 
-	peersChan := make(chan string)	
-	go broadcast(peersChan)
-
-	peers := strings.Split(<-peersChan, " ")
-	
-	_, err := NewPeer(uint16(*port), peers)
-	if err != nil {
-		log.Fatal(err)
-	}
-	
-	// stdReader := bufio.NewReader(os.Stdin)
-	// for {
-	// 	peer.Read()	
-	// }
+type AppState struct {
+	pools []string
+	currentPool string
+	action map[string]ActionHandler
 }
 
-func broadcast(peers chan string) {
+func main() {
 	addr := net.JoinHostPort(shared.Hostname, strconv.Itoa(shared.Port))
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
-	defer func() {
-		conn.Close()
-		log.Println("Disconnected.")
-	}()
 
-	log.Println("Connected to broadcaster")
+	broadcast := NewBroadcast(conn)
+	broadcast.SendPoolRetreivalMessage()
 
-	go func() {
-		pakt := shared.NewPacket(addr)
-		pakt.WriteByte(byte(shared.GetPeersMessage))
-		conn.Write(pakt.GetBytes())
-		buff := make([]byte, 1024)
-		nbr, err := conn.Read(buff)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pakt.Load(buff[:nbr])
-		str, err := pakt.ReadString()
-		if err != nil {
-			log.Fatal(err)
-		}
-		pakt.Flush()
-		peers <- str
-	}()
+	log.Printf("Connected to %s\n", conn.RemoteAddr().String())
 
-	pakt := shared.NewPacket(addr)
-	pakt.WriteByte(byte(shared.PingMessage))
-	dat := pakt.GetBytes()
-	lim := time.Tick(time.Second / shared.PingTicks)
+	var state AppState = AppState{
+		action: map[string]ActionHandler{
+			"create": broadcast.SendPoolCreateMessage,
+			"join": func () error {
+				reader := bufio.NewReader(os.Stdin)
+				log.Print("Please enter the pool's id: ")
+				id, err := reader.ReadString('\n') 
+				if err != nil {
+					return err
+				}
+				return broadcast.SendPoolJoinMessage(id[:len(id)-1])
+			}, 
+		},
+	}
+
 	for {
-		<-lim
-		nbr, err := conn.Write(dat)
-		if err != nil || nbr < len(dat) {
-			log.Printf("Failed to send message: %s\n", err)
-			break
+		packet, err := broadcast.Listen()
+		if err != nil {
+			log.Panic(err)
+		}
+
+		typ, err := packet.ReadByte()
+		if err != nil {
+			log.Panic(err)
+		}
+
+		log.Printf("Received message %d\n", typ)
+
+		if state.pools == nil {
+			if typ == byte(shared.MessageRetreivePools) {
+				str, _ := packet.ReadString()
+				state.pools = strings.Split(str, " ") 
+
+				log.Println(state.pools)
+			}
+			go func() {
+				for {
+					var cmd string
+					reader := bufio.NewReader(os.Stdin)
+				readcmd:
+					cmd, err = reader.ReadString('\n')
+					if err != nil {
+						log.Println(err)
+						goto readcmd	
+					}
+					cmd = cmd[:len(cmd)-1]
+					handler, ok := state.action[cmd]
+					if !ok {
+						log.Printf("SYNTAX_ERROR: Invalid command %s\n", cmd)
+						goto readcmd
+					}
+					handler()
+				}
+			}()
+			continue
+		}
+
+		if typ == byte(shared.MessageCreatePool) {
+			str, _ := packet.ReadString()
+			state.pools = append(state.pools, str)
+
+			log.Println(state.pools)
 		}
 	}
 }
