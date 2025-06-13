@@ -1,14 +1,18 @@
 [
   {
-    "Text": "Add notification for new peers that connected and disconnected to and from the broadcaster",
+    "Text": "Finish Centerlized Server Logic By (Finish Pool Logic which must be shared between server and client)",
     "Done": false
   },
   {
-    "Text": "Make the ability for two peers to communicate with each other after knowing who they are",
-    "Done": false 
+    "Text": "Fix errors cs side related to pool changes",
+    "Done": false
   },
   {
-    "Text": "Try to visit decentralization methods with out-of-bound sharing or smthing my mom is repeadtly asking me to sleep and it's 2:18 in the night and I'm getting really FUCKING PISSED OF FUCCKKKK",
+    "Text": "Work on the actual peer to peer implementation dumb ass",
+    "Done": false
+  },
+  {
+    "Text": "Make it so people can actually make use of this pile of shit",
     "Done": false
   }
 ]
