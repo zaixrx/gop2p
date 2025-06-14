@@ -1,11 +1,11 @@
 [
   {
     "Text": "Finish Centerlized Server Logic By (Finish Pool Logic which must be shared between server and client)",
-    "Done": false
+    "Done": true
   },
   {
     "Text": "Fix errors cs side related to pool changes",
-    "Done": false
+    "Done": true
   },
   {
     "Text": "Work on the actual peer to peer implementation dumb ass",
@@ -21,6 +21,10 @@
   },
   {
     "Text": "Add middlewares to prevent repetitive code",
+    "Done": false
+  },
+  {
+    "Text": "Make centeralized server communicate with tcp rather than udp",
     "Done": false
   }
 ]
