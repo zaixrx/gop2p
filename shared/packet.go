@@ -2,8 +2,8 @@ package shared
 
 import (
 	"encoding/binary"
-	"strings"
 	"fmt"
+	"strings"
 )
 
 type Packet struct {
@@ -30,7 +30,7 @@ func (p *Packet) Get(n uint32) ([]byte, error) {
 	p.offset += n
 	if p.offset > length { 
 		p.offset = length - 1
-		return nil, fmt.Errorf("ERROR: out of bound by %d\n", p.offset - length)
+		return nil, fmt.Errorf("ERROR: out of bound by %d", p.offset - length)
 	}
 	return p.data[p.offset - n:p.offset], nil
 }
@@ -59,24 +59,23 @@ func (p *Packet) ReadString() (string, error) {
 	}
 	return string(dat), nil
 }
-func (p *Packet) ReadPool() (*Pool, error) {
-	id, err := p.ReadString()
+func (p *Packet) ReadPool() (*PublicPool, error) {
+	poolID, err := p.ReadString()
 	if err != nil {
 		return nil, err
 	}
-	host, err := p.ReadString()
+	hostIP, err := p.ReadString()
 	if err != nil {
 		return nil, err
 	}
-	peers, err := p.ReadString()
+	peerIPs, err := p.ReadString()
 	if err != nil {
 		return nil, err
 	}
-	
-	return &Pool{
-		id: id,
-		host: host,
-		peers: strings.Split(peers, " "),
+	return &PublicPool{
+		Id: poolID,
+		HostIP: hostIP,
+		PeerIPs: strings.Split(peerIPs, " "),
 	}, nil
 }
 
@@ -96,10 +95,10 @@ func (p *Packet) WriteString(dat string) error {
 	p.data = append(p.data, []byte(dat)...)
 	return nil
 }
-func (p *Packet) WritePool(key string, pool *Pool) error {
-	p.WriteString(key)
-	p.WriteString(pool.host)
-	p.WriteString(strings.Join(pool.peers, " "))
+func (p *Packet) WritePool(dat *PublicPool) error {
+	p.WriteString(dat.Id)
+	p.WriteString(dat.HostIP)
+	p.WriteString(strings.Join(dat.PeerIPs, " "))
 	return nil
 }
 func (p *Packet) GetBytes() []byte {

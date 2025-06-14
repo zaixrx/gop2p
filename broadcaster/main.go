@@ -1,4 +1,4 @@
-package main 
+package main
 
 import (
 	"log"
@@ -19,15 +19,11 @@ func main() {
 	}	
 
 	defer conn.Close()
-
 	log.Printf("Listening on %s:%d\n", shared.Hostname, shared.Port)
 
 	server = NewServer(conn)
 	
 	for {
-		err := server.Listen()
-		if err != nil {
-			log.Println(err)
-		}
+		go server.Listen()
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"log"
 	"p2p/shared"
 )
 
@@ -34,7 +35,7 @@ func (b *Broadcast) Write(dat []byte) (int, error) {
 
 func (b *Broadcast) SendPoolRetreivalMessage() error {
 	packet := shared.NewPacket()
-	packet.WriteByte(byte(shared.MessageRetreivePools))
+	packet.WriteByte(byte(shared.MessageRetrievePools))
 	_, err := b.Write(packet.GetBytes())
 	return err
 }
@@ -52,15 +53,6 @@ func (b *Broadcast) SendPoolJoinMessage(poolID string) error {
 	packet.WriteString(poolID)
 	_, err := b.Write(packet.GetBytes())
 	return err
-	
-}
-
-func (b *Broadcast) SendPoolDeleteMessage(poolID string) error {
-	packet := shared.NewPacket()
-	packet.WriteByte(byte(shared.MessageDeletePool))
-	packet.WriteString(poolID)
-	_, err := b.Write(packet.GetBytes())
-	return err
 }
 
 func (b *Broadcast) SendPoolLeaveMessage(poolID string) error {
@@ -69,5 +61,13 @@ func (b *Broadcast) SendPoolLeaveMessage(poolID string) error {
 	packet.WriteString(poolID)
 	_, err := b.Write(packet.GetBytes())
 	return err
-	
+}
+
+func (b *Broadcast) SendPoolPingMessage(poolID string) error {
+	packet := shared.NewPacket()
+	packet.WriteByte(byte(shared.MessagePoolPing))
+	packet.WriteString(poolID)
+	_, err := b.Write(packet.GetBytes())
+	log.Println("Sending Ping Message")
+	return err
 }

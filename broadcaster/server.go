@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"p2p/shared"
+	"sync"
+	"time"
 )
 
 type MessageHandler func(*shared.Packet, *net.UDPAddr, *Server) error 
@@ -13,22 +14,25 @@ type MessageHandler func(*shared.Packet, *net.UDPAddr, *Server) error
 type Server struct {
 	mux sync.Mutex
 	conn *net.UDPConn
-	pools map[string]*Pool
+	pools map[string]*shared.ServerPool
 	handler map[shared.MessageType]MessageHandler 
 }
 
 func NewServer(conn *net.UDPConn) *Server {
 	return &Server{
 		conn: conn,
-		pools: make(map[string]*Pool), 
+		pools: make(map[string]*shared.ServerPool),
 		handler: map[shared.MessageType]MessageHandler {
-			shared.MessageJoinPool: HandlePoolJoinMessage,
-			shared.MessageLeavePool: HandlePoolLeaveMessage,
+			shared.MessageRetrievePools: HandlePoolRetreivalMessage,
 			shared.MessageCreatePool: HandlePoolCreateMessage,
-			shared.MessageDeletePool: HandlePoolDeleteMessage,
-			shared.MessageRetreivePools: HandlePoolRetreivalMessage,
+			shared.MessageJoinPool: HandlePoolJoinMessage,
+			shared.MessagePoolPing: HandlePoolPingMessage,
 		},
 	}
+}
+
+func (s *Server) Write(b []byte, a *net.UDPAddr) (int, error) {
+	return s.conn.WriteToUDP(b, a)
 }
 
 func (s *Server) Listen() error {
@@ -43,16 +47,9 @@ func (s *Server) Listen() error {
 		return nil
 	}
 
-	err = s.handleMessage(buff[:n], addr)
-	if err != nil {
-		return err
-	}
-
+	s.handleMessage(buff[:n], addr)
+	
 	return nil
-}
-
-func (s *Server) Write(b []byte, a *net.UDPAddr) (int, error) {
-	return s.conn.WriteToUDP(b, a)
 }
 
 func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
@@ -74,10 +71,31 @@ func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
 	return handler(packet, addr, s)
 }
 
-func (s *Server) GetPool(id string) (*Pool, error) {
-	pool, ok := s.pools[id]
+func (s *Server) MonitorPool(id string) {
+	pool := s.pools[id]
+	host := pool.Peers[pool.HostID]
+
+	for {
+		select {
+		case <-pool.PingChan:
+			continue
+		case <-time.After(shared.PoolPingTimeout * time.Second):
+			log.Printf("Pool %s host's timedout\n", pool.Id)
+
+			packet := shared.NewPacket()
+			packet.WriteByte(byte(shared.MessagePoolPingTimeout))
+			s.Write(packet.GetBytes(), host)
+
+			delete(s.pools, id)
+			return
+		}
+	}
+}
+
+func (s *Server) GetPool(poolID string) (*shared.ServerPool, error) {
+	pool, ok := s.pools[poolID]
 	if !ok {
-		return nil, fmt.Errorf("ERROR: pool with id %s doesn't exist", id)
+		return nil, fmt.Errorf("ERROR: pool with id %s doesn't exist", poolID)
 	}
 	return pool, nil 
 }

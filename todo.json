@@ -14,5 +14,13 @@
   {
     "Text": "Make it so people can actually make use of this pile of shit",
     "Done": false
+  },
+  {
+    "Text": "Split packet messages logic to senders and getters",
+    "Done": false
+  },
+  {
+    "Text": "Add middlewares to prevent repetitive code",
+    "Done": false
   }
 ]

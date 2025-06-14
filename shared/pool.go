@@ -1,57 +1,90 @@
-package shared 
+package shared
 
 import (
-	"net"
 	"fmt"
+	"net"
 	"sync"
-	"slices"
 )
 
-type Pool struct {
+type ServerPool struct {
 	mux sync.Mutex
-	id string
-	host string
-	peers []string 
+	Id string
+	HostID string
+	PingChan chan struct{}
+	Peers map[string]*net.UDPAddr
 }
 
-func NewPool(id string, host *net.UDPAddr) *Pool {
-	return &Pool{
-		id: id,
-		host: host.String(),
-		peers: []string{host.String()},
+type PublicPool struct {
+	Id string
+	HostIP string
+	PeerIPs []string
+}
+
+func NewPool(id string, host *net.UDPAddr) *ServerPool {
+	pool := &ServerPool{
+		Id: id,
+		HostID: host.String(),
+		Peers: make(map[string]*net.UDPAddr),
 	}
+
+	pool.Add(host)
+	
+	return pool
 }
 
-func (p *Pool) Add(peer string) error {
+func (p *ServerPool) Add(peer *net.UDPAddr) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
-	if exists, _ := p.PeerExists(peer); exists {
+	peerID := peer.String()
+	if p.PeerExists(peerID) {
 		return fmt.Errorf("ERROR: peer already exists in pool")
 	}
-	
-	p.peers = append(p.peers, peer)
+	p.Peers[peerID] = peer
+
 	return nil
 }
 
-func (p *Pool) Remove(peer string) error {
+func (p *ServerPool) Remove(peerID string) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
-	if peer == p.host {
-		return fmt.Errorf("ERROR: removing host from peer's pool requires removing the pool itself")
+	if peerID == p.HostID {
+		return fmt.Errorf("ERROR: removing host from pool requires removing the pool itself")
 	}
-	exists, index := p.PeerExists(peer)
-	if !exists { 
+
+	if !p.PeerExists(peerID) { 
 		return fmt.Errorf("ERROR: peer not found")
 	}
-	n := len(p.peers)
-	p.peers[index] = p.peers[n - 1]
-	p.peers = p.peers[:n-1]
+
+	delete(p.Peers, peerID)
+	
 	return nil
 }
 
-func (p *Pool) PeerExists(peer string) (bool, int) {
-	i := slices.Index(p.peers, peer) 
-	return i != -1, i
+func (p *ServerPool) PeerExists(peerID string) bool {
+	_, exists := p.Peers[peerID]
+	return exists
+}
+
+func (p *ServerPool) ToPublic() *PublicPool {
+	keys := make([]string, len(p.Peers))
+	i := 0
+	for key := range p.Peers {
+		keys[i] = key
+		i++
+	}
+	host := p.Peers[p.HostID]
+	return &PublicPool{
+		Id: p.Id,
+		HostIP: host.String(),
+		PeerIPs: keys,
+	}
+}
+
+func (p *ServerPool) Ping() {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	fmt.Println("Ping!")
+	p.PingChan<-struct{}{}
 }
