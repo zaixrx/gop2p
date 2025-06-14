@@ -11,11 +11,11 @@ func main() {
 	// That is really how simple it is
 	// I'm a genuis man!!
 	stage := CreateBroadcastingStage(BackgroundTask)
-	err := stage.Run()
+	state, err := stage.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(stage.state.currentPool)
+	log.Println(state.currentPool)
 	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 

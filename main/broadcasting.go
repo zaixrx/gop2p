@@ -60,8 +60,7 @@ func HandleRetreivePool(ctx context.Context, state *State) (StateAction[State], 
 	log.Println("Read Retreiving Pools")
 	str, _ := state.packet.ReadString()
 	state.pools = strings.Split(str, " ") 
-
-	log.Println(state.pools)
+	log.Println("Available Pools", state.pools)
 	return state.Listen([]shared.MessageType{shared.MessageJoinPool})
 }
 
@@ -72,21 +71,9 @@ func HandlePoolJoin(ctx context.Context, state *State) (StateAction[State], erro
 		return nil, err
 	}
 	state.currentPool = pool
-	go func(ctx context.Context) {
-		limitter := time.Tick(1000 / shared.PoolPingTicks * time.Millisecond)
-		for {
-			<-limitter
-			if state.currentPool == nil {
-				break
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				state.br.SendPoolPingMessage(state.currentPool.Id)
-			}
-		}
-	}(ctx)
+	if state.currentPool.YourIP == state.currentPool.HostIP {
+		go HandleSendPoolPing(ctx, state)
+	}
 	return state.Listen([]shared.MessageType{shared.MessagePoolPingTimeout})
 }
 
@@ -115,4 +102,16 @@ func (s *State) Listen(to []shared.MessageType) (StateAction[State], error) {
 		log.Println("Read message", msgType)
 	}	
 	return s.messageHandlers[shared.MessageType(msgType)], nil
+}
+
+func HandleSendPoolPing(ctx context.Context, state *State) {
+	limitter := time.Tick(time.Millisecond * 1000 / shared.PoolPingTicks)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-limitter:
+			state.br.SendPoolPingMessage(state.currentPool.Id)
+		}
+	}
 }

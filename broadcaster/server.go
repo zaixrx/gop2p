@@ -41,13 +41,14 @@ func (s *Server) Listen() error {
 	if err != nil {
 		return err
 	}
-
 	if n == 0 {
-		log.Printf("Recevied empty buffer\n")
 		return nil
 	}
 
-	s.handleMessage(buff[:n], addr)
+	err = s.handleMessage(buff[:n], addr)
+	if err != nil {
+		log.Println(err)
+	}
 	
 	return nil
 }
@@ -71,22 +72,30 @@ func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
 	return handler(packet, addr, s)
 }
 
-func (s *Server) MonitorPool(id string) {
-	pool := s.pools[id]
-	host := pool.Peers[pool.HostID]
+func (s *Server) MonitorPool(poolID string) {
+	pool, err := s.GetPool(poolID)
+	if err != nil {
+		return 
+	}
+
+	log.Printf("Monitoring Pool %v\n", pool.PingChan) 
 
 	for {
 		select {
 		case <-pool.PingChan:
 			continue
 		case <-time.After(shared.PoolPingTimeout * time.Second):
-			log.Printf("Pool %s host's timedout\n", pool.Id)
+			s.mux.Lock()
+			defer s.mux.Unlock()
+			
+			log.Printf("Pool %s host's timedout\n", poolID)
 
 			packet := shared.NewPacket()
 			packet.WriteByte(byte(shared.MessagePoolPingTimeout))
-			s.Write(packet.GetBytes(), host)
 
-			delete(s.pools, id)
+			s.Write(packet.GetBytes(), pool.Peers[pool.HostID])
+
+			delete(s.pools, poolID)
 			return
 		}
 	}

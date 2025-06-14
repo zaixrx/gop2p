@@ -20,7 +20,7 @@ func NewStateContext(initialAction, backgroundTask StateAction[State]) *StateCon
 	}
 }
 
-func (sc *StateContext[State]) Run() error {
+func (sc *StateContext[State]) Run() (*State, error) {
 	var (
 		currSA StateAction[State] = sc.initialAction
 		firstTime = false
@@ -33,7 +33,7 @@ func (sc *StateContext[State]) Run() error {
 	for {
 		currSA, err = currSA(ctx, &sc.state)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if currSA == nil {
 			break
@@ -46,7 +46,7 @@ func (sc *StateContext[State]) Run() error {
 		// d := sc.decisionReader(Keys(saMap))
 		// currSA = saMap[d]
 	}
-	return nil
+	return &sc.state, nil
 }
 
 // func Keys[T any](m map[string]T) []string {

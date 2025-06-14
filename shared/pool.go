@@ -3,11 +3,9 @@ package shared
 import (
 	"fmt"
 	"net"
-	"sync"
 )
 
 type ServerPool struct {
-	mux sync.Mutex
 	Id string
 	HostID string
 	PingChan chan struct{}
@@ -16,6 +14,7 @@ type ServerPool struct {
 
 type PublicPool struct {
 	Id string
+	YourIP string
 	HostIP string
 	PeerIPs []string
 }
@@ -24,6 +23,7 @@ func NewPool(id string, host *net.UDPAddr) *ServerPool {
 	pool := &ServerPool{
 		Id: id,
 		HostID: host.String(),
+		PingChan: make(chan struct{}),
 		Peers: make(map[string]*net.UDPAddr),
 	}
 
@@ -33,9 +33,6 @@ func NewPool(id string, host *net.UDPAddr) *ServerPool {
 }
 
 func (p *ServerPool) Add(peer *net.UDPAddr) error {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-
 	peerID := peer.String()
 	if p.PeerExists(peerID) {
 		return fmt.Errorf("ERROR: peer already exists in pool")
@@ -46,9 +43,6 @@ func (p *ServerPool) Add(peer *net.UDPAddr) error {
 }
 
 func (p *ServerPool) Remove(peerID string) error {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-
 	if peerID == p.HostID {
 		return fmt.Errorf("ERROR: removing host from pool requires removing the pool itself")
 	}
@@ -67,7 +61,8 @@ func (p *ServerPool) PeerExists(peerID string) bool {
 	return exists
 }
 
-func (p *ServerPool) ToPublic() *PublicPool {
+// WARINING: This function expects this existance of (you, host)
+func (p *ServerPool) ToPublic(you *net.UDPAddr) *PublicPool {
 	keys := make([]string, len(p.Peers))
 	i := 0
 	for key := range p.Peers {
@@ -77,14 +72,8 @@ func (p *ServerPool) ToPublic() *PublicPool {
 	host := p.Peers[p.HostID]
 	return &PublicPool{
 		Id: p.Id,
+		YourIP: you.String(),
 		HostIP: host.String(),
 		PeerIPs: keys,
 	}
-}
-
-func (p *ServerPool) Ping() {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-	fmt.Println("Ping!")
-	p.PingChan<-struct{}{}
 }

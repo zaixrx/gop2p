@@ -2,9 +2,9 @@ package main
 
 import (
 	"net"
-	"p2p/shared"
+	"fmt"
 	"strings"
-	"log"
+	"p2p/shared"
 	"github.com/google/uuid"
 )
 
@@ -19,7 +19,7 @@ func HandlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *S
 
 	p := shared.NewPacket()
 	p.WriteByte(byte(shared.MessageJoinPool))
-	p.WritePool(pool.ToPublic())
+	p.WritePool(pool.ToPublic(addr))
 
 	server.Write(p.GetBytes(), addr)
 	
@@ -52,14 +52,17 @@ func HandlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 	if err != nil {
 		return err
 	}
+
 	pool, err := server.GetPool(key)	
 	if err != nil {
 		return err
 	}
+
 	pool.Add(addr)
 	p := shared.NewPacket()
 	p.WriteByte(byte(shared.MessageJoinPool))
-	p.WritePool(pool.ToPublic())
+	p.WritePool(pool.ToPublic(addr))
+
 	server.Write(p.GetBytes(), addr)
 	
 	return nil
@@ -69,8 +72,6 @@ func HandlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 	server.mux.Lock()
 	defer server.mux.Unlock()
 
-	log.Println("Ping Message Recieved!")
-
 	poolID, err := packet.ReadString()
 	if err != nil {
 		return err
@@ -78,10 +79,14 @@ func HandlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 
 	pool, err := server.GetPool(poolID)
 	if err != nil {
-		return nil
+		return err 
 	}
 
-	pool.Ping()
+	if addr.String() != pool.Peers[pool.HostID].String() {
+		return fmt.Errorf("ERROR: only the host can send ping messages")
+	}
+
+	pool.PingChan<-struct{}{}
 
 	return nil
 }

@@ -2,8 +2,8 @@ package shared
 
 import (
 	"encoding/binary"
-	"fmt"
 	"strings"
+	"fmt"
 )
 
 type Packet struct {
@@ -68,6 +68,10 @@ func (p *Packet) ReadPool() (*PublicPool, error) {
 	if err != nil {
 		return nil, err
 	}
+	yourIP, err := p.ReadString()
+	if err != nil {
+		return nil, err
+	}
 	peerIPs, err := p.ReadString()
 	if err != nil {
 		return nil, err
@@ -75,6 +79,7 @@ func (p *Packet) ReadPool() (*PublicPool, error) {
 	return &PublicPool{
 		Id: poolID,
 		HostIP: hostIP,
+		YourIP: yourIP,
 		PeerIPs: strings.Split(peerIPs, " "),
 	}, nil
 }
@@ -98,6 +103,7 @@ func (p *Packet) WriteString(dat string) error {
 func (p *Packet) WritePool(dat *PublicPool) error {
 	p.WriteString(dat.Id)
 	p.WriteString(dat.HostIP)
+	p.WriteString(dat.YourIP)
 	p.WriteString(strings.Join(dat.PeerIPs, " "))
 	return nil
 }

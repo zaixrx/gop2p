@@ -24,6 +24,10 @@ func main() {
 	server = NewServer(conn)
 	
 	for {
-		go server.Listen()
+		err := server.Listen()
+		if err != nil {
+			log.Printf("ERROR: %s\n", err)
+			continue
+		}
 	}
 }
