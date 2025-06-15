@@ -8,8 +8,8 @@ P2P Computing:
 - An Example(golang): https://dev.to/hadeedtariq/hands-on-with-p2p-networks-building-a-messaging-system-12nd
 
 Golang
-- Context: https://medium.com/@jamal.kaksouri/the-complete-guide-to-context-in-golang-efficient-concurrency-management-43d722f6eaea
-- StateMachines: https://medium.com/@johnsiilver/go-state-machine-patterns-3b667f345b5e
+- Concurrent Programming: https://edu.anarcho-copy.org/Programming%20Languages/Go/Concurrency%20in%20Go.pdf
+- A StateMachine model : https://medium.com/@johnsiilver/go-state-machine-patterns-3b667f345b5e
                https://www.youtube.com/watch?v=HxaD_trXwRE
 - An Idea About Debouncing(Inspired me to check for pool timeouts): https://medium.com/gopher-time/implementing-debounce-functionality-in-go-29c4e7a83a56
 - General Concepts: https://gobyexample.com/
