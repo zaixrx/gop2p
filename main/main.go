@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	brCloseChan := make(chan struct {})
-	brStage := CreateBroadcastingStage(brCloseChan, func() (BRMsgType, []string) {
+	closePingChan := make(chan struct {})
+	brStage := CreateBroadcastingStage(closePingChan, func() (BRMsgType, []string) {
 		reader := bufio.NewReader(os.Stdin)
 
 		readStr := func() string {
@@ -31,17 +31,19 @@ func main() {
 		}
 	})
 
-	brStateChan := make(chan *BRState)
-	go brStage.Run(brStateChan, nil)
-	brState := <-brStateChan
+	brState, termErr := brStage.Run(nil)
+	if termErr != nil {
+		log.Fatal(termErr)
+	}
 
-	p2p := CreateP2PStage(brState.CurrentPool)
+	p2p := CreateP2PStage(brState.CurrentPool, 0)
 	cancelP2PChan := make(chan context.CancelFunc)
-	go p2p.Run(nil, cancelP2PChan)
-	cancelP2P := <- cancelP2PChan
+	_, termErr = p2p.Run(cancelP2PChan)
+	if termErr != nil {
+		log.Fatal(termErr)
+	}
 
-	<-brCloseChan
+	cancelP2P := <-cancelP2PChan
+	<-closePingChan
 	cancelP2P()
-
-	bufio.NewReader(os.Stdin).ReadString('\n')
 }

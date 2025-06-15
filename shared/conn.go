@@ -20,6 +20,7 @@ const (
 	MessageJoinPool
 
 	// Server to Client
+	MessageError	
 	MessagePoolPingTimeout
 )
 

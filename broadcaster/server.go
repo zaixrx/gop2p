@@ -12,9 +12,11 @@ import (
 type MessageHandler func(*shared.Packet, *net.UDPAddr, *Server) error 
 
 type Server struct {
-	mux sync.Mutex
 	conn *net.UDPConn
+
+	mux sync.Mutex
 	pools map[string]*shared.ServerPool
+
 	handler map[shared.MessageType]MessageHandler 
 }
 
@@ -45,10 +47,7 @@ func (s *Server) Listen() error {
 		return nil
 	}
 
-	err = s.handleMessage(buff[:n], addr)
-	if err != nil {
-		log.Println(err)
-	}
+	go s.handleMessage(buff[:n], addr)
 	
 	return nil
 }
@@ -59,17 +58,33 @@ func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
 
 	msgTyp, err := packet.ReadByte()
 	if err != nil {
-		return err
+		s.reportError(err, addr)
+		return nil
 	}
 
 	log.Printf("Received message %d from %s\n", msgTyp, addr.String())
 
 	handler, ok := s.handler[shared.MessageType(msgTyp)]
 	if !ok {
-		return fmt.Errorf("ERROR: unknown message type")
+		s.reportError(fmt.Errorf("ERROR: unknown message type"), addr)
+		return nil
 	}
 
-	return handler(packet, addr, s)
+	err = handler(packet, addr, s)
+	if err != nil {
+		serr := s.reportError(err, addr)
+		return serr 
+	}
+
+	return nil
+}
+
+func (s *Server) reportError(err error, to *net.UDPAddr) error {
+	packet := shared.NewPacket()
+	packet.WriteByte(byte(shared.MessageError))
+	packet.WriteString(err.Error())
+	_, serr := s.Write(packet.GetBytes(), to)
+	return serr 
 }
 
 func (s *Server) MonitorPool(poolID string) {

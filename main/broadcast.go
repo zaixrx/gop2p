@@ -60,6 +60,8 @@ func (b *Broadcast) SendPoolPingMessage(poolID string) error {
 	packet.WriteByte(byte(shared.MessagePoolPing))
 	packet.WriteString(poolID)
 	_, err := b.Write(packet.GetBytes())
-	log.Println("Sending Ping Message")
+	if err == nil {
+		log.Println("Sending Ping Message")
+	}
 	return err
 }

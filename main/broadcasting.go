@@ -3,7 +3,9 @@ package main
 import (
 	"net"
 	"log"
+	"fmt"
 	"time"
+	"errors"
 	"slices"
 	"context"
 	"strconv"
@@ -67,7 +69,13 @@ func SendRetrievePools(ctx context.Context, state *BRState) (StateAction[BRState
 		return nil, err
 	}
 
-	return state.Listen([]shared.MessageType{shared.MessageRetrievePools})
+	next, err := state.Listen([]shared.MessageType{shared.MessageRetrievePools})
+	if err != nil {
+		// TODO: reconnect merda 
+		return nil, err
+	}
+
+	return next, nil
 }
 
 func HandleRetreivePool(ctx context.Context, state *BRState) (StateAction[BRState], error) {
@@ -78,26 +86,33 @@ func HandleRetreivePool(ctx context.Context, state *BRState) (StateAction[BRStat
 
 	state.Pools = strings.Split(rawPools, " ") 
 	log.Println(rawPools)
+	// TODO: stream that shit over a channel
 
 	return HandleAfterPoolRetrieval, nil 
 }
 
 func HandleAfterPoolRetrieval(ctx context.Context, state *BRState) (StateAction[BRState], error) {
 	typ, args := state.onConnection()
+
 	switch typ {
 	case BRCreatePool:
 		err := state.br.SendPoolCreateMessage()
 		if err != nil {
-			return nil, err
+			return HandleAfterPoolRetrieval, err 
 		}
 	case BRJoinPool:
 		err := state.br.SendPoolJoinMessage(args[0])
 		if err != nil {
-			return nil, err
+			return HandleAfterPoolRetrieval, err 
 		}
 	}
 
-	return state.Listen([]shared.MessageType{shared.MessageJoinPool})
+	next, err := state.Listen([]shared.MessageType{shared.MessageJoinPool})
+	if err != nil {
+		return HandleAfterPoolRetrieval, err
+	}
+
+	return next, nil
 }
 
 func HandlePoolJoin(ctx context.Context, state *BRState) (StateAction[BRState], error) {
@@ -116,23 +131,24 @@ func HandlePoolJoin(ctx context.Context, state *BRState) (StateAction[BRState], 
 	return nil, nil
 }
 
-func (s *BRState) HandlePoolPing(poolID string, closeChan <-chan struct{}) {
+func (s *BRState) HandlePoolPing(poolID string, closeChan chan struct{}) {
 	limitter := time.Tick(time.Millisecond * 1000 / shared.PoolPingTicks)
 	for {
 		select {
 		case <-closeChan:
 			return
 		case <-limitter:
-			s.br.SendPoolPingMessage(poolID)
+			err := s.br.SendPoolPingMessage(poolID)
+			if err != nil {
+				closeChan <- struct{}{}
+				return
+			}
 		}
 	}
 }
 
 func (s *BRState) HandlePingTimeout(closeChan chan<- struct{}) {
-	_, err := s.Listen([]shared.MessageType{shared.MessagePoolPingTimeout})
-	if err != nil {
-		return
-	}
+	s.Listen([]shared.MessageType{shared.MessagePoolPingTimeout})
 	closeChan <- struct{}{}
 }
 
@@ -150,6 +166,13 @@ func (s *BRState) Listen(to []shared.MessageType) (StateAction[BRState], error) 
 		msgType, err = s.packet.ReadByte()
 		if err != nil {
 			return nil, err
+		}
+		if msgType == byte(shared.MessageError) {
+			errmsg, corrErrErr := s.packet.ReadString()
+			if corrErrErr != nil {
+				return nil, fmt.Errorf("ERROR: recieved unexpected error format from broadcaster %s", corrErrErr)
+			}
+			return nil, errors.New(errmsg)
 		}
 		if slices.Contains(to, shared.MessageType(msgType)) {
 			break

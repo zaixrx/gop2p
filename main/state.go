@@ -21,7 +21,7 @@ func NewStateContext[State any](initialAction StateAction[State]) *StateContext[
 	}
 }
 
-func (sc *StateContext[State]) Run(stateChan chan<- *State, cancelChan chan<- context.CancelFunc) { 
+func (sc *StateContext[State]) Run(cancelChan chan<- context.CancelFunc) (*State, error) {
 	var (
 		currSA StateAction[State] = sc.initialAction
 		err error
@@ -32,27 +32,23 @@ func (sc *StateContext[State]) Run(stateChan chan<- *State, cancelChan chan<- co
 	if cancelChan != nil {
 		cancelChan <- cancel
 	}
-
-	defer func() {
-		if stateChan != nil {
-			stateChan <- &sc.state	
-		}
-		cancel()
-	}()
-
+	defer cancel() 
+	
+	i := 0
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return &sc.state, ctx.Err()
 		default:
 			currSA, err = currSA(ctx, &sc.state)
 			if err != nil {
-				log.Printf("ERROR: %s", err)
-				return	
+				log.Printf("ERROR %d: %s", i, err)
+				// TODO: make onError event subscriber
 			}
 			if currSA == nil {
-				return
+				return &sc.state, err
 			}
+			i++
 		}
 	}	
 }
