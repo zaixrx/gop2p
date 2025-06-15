@@ -25,6 +25,6 @@
   },
   {
     "Text": "Make centeralized server communicate with tcp rather than udp",
-    "Done": false
+    "Done": true
   }
 ]

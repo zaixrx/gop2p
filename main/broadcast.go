@@ -55,14 +55,6 @@ func (b *Broadcast) SendPoolJoinMessage(poolID string) error {
 	return err
 }
 
-func (b *Broadcast) SendPoolLeaveMessage(poolID string) error {
-	packet := shared.NewPacket()
-	packet.WriteByte(byte(shared.MessageLeavePool))
-	packet.WriteString(poolID)
-	_, err := b.Write(packet.GetBytes())
-	return err
-}
-
 func (b *Broadcast) SendPoolPingMessage(poolID string) error {
 	packet := shared.NewPacket()
 	packet.WriteByte(byte(shared.MessagePoolPing))

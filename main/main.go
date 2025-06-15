@@ -8,48 +8,40 @@ import (
 )
 
 func main() {
-	// That is really how simple it is
-	// I'm a genuis man!!
-	stage := CreateBroadcastingStage(BackgroundTask)
-	state, err := stage.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(state.currentPool)
-	bufio.NewReader(os.Stdin).ReadString('\n')
-}
+	brCloseChan := make(chan struct {})
+	brStage := CreateBroadcastingStage(brCloseChan, func() (BRMsgType, []string) {
+		reader := bufio.NewReader(os.Stdin)
 
-func BackgroundTask(ctx context.Context, state *State) (StateAction[State], error) {
-	br := state.br
-
-	reader := bufio.NewReader(os.Stdin)
-	actionMapper := map[string]func() error {
-		"create": br.SendPoolCreateMessage,
-		"join": func() error {
-			poolID, err := reader.ReadString('\n')
-			if err != nil {
-				return err
-			}
-			poolID = poolID[:len(poolID)-1]
-			return br.SendPoolJoinMessage(poolID)
-		},
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			msg, err := reader.ReadString('\n')
-			if err != nil {
-				return nil, err
-			}
-			msg = msg[:len(msg)-1]
-			action, exists := actionMapper[msg]
-			if !exists {
-				log.Printf("SYNTAX_ERROR: no such command as %s\n", msg)
-				continue
-			}
-			action()
+		readStr := func() string {
+			txt, _ := reader.ReadString('\n')
+			txt = txt[:len(txt)-1]
+			return txt
 		}
-	}
+
+		for {
+			msg := readStr()
+			switch msg {
+			case "create":
+				return BRCreatePool, nil
+			case "join":
+				return BRJoinPool, []string{readStr()} 
+			default:
+				log.Printf("Invalid Message %s", msg)
+			}
+		}
+	})
+
+	brStateChan := make(chan *BRState)
+	go brStage.Run(brStateChan, nil)
+	brState := <-brStateChan
+
+	p2p := CreateP2PStage(brState.CurrentPool)
+	cancelP2PChan := make(chan context.CancelFunc)
+	go p2p.Run(nil, cancelP2PChan)
+	cancelP2P := <- cancelP2PChan
+
+	<-brCloseChan
+	cancelP2P()
+
+	bufio.NewReader(os.Stdin).ReadString('\n')
 }

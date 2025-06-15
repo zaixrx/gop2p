@@ -12,22 +12,43 @@ import (
 )
 
 //type StateAction[State any] func(state *State) (StateAction[State], error)
-
-type State struct {
+type BRState struct {
 	br *Broadcast
+
 	conn net.Conn
 	packet *shared.Packet
-	messageHandlers map[shared.MessageType]StateAction[State]
+	listenHandler map[shared.MessageType]StateAction[BRState]
 
-	pools []string
-	currentPool *shared.PublicPool
+	Pools []string
+	CurrentPool *shared.PublicPool
+	
+	onConnection func() (BRMsgType, []string) 
+	closeChan chan struct{}
 }
 
-func CreateBroadcastingStage(backgroundTask StateAction[State]) *StateContext[State] {
-	return NewStateContext(ConnectToBroadcaster, backgroundTask)
+type BRMsgType byte 
+
+const (
+	BRCreatePool BRMsgType = iota 
+	BRJoinPool
+)
+
+func CreateBroadcastingStage(closeChan chan struct{}, onConnection func() (BRMsgType, []string)) *StateContext[BRState] {
+	stage := NewStateContext(ConnectToBroadcaster)
+	
+	stage.state.packet = shared.NewPacket()
+	stage.state.listenHandler = map[shared.MessageType]StateAction[BRState]{
+		shared.MessageRetrievePools: HandleRetreivePool,
+		shared.MessageJoinPool: HandlePoolJoin,
+	}
+
+	stage.state.onConnection = onConnection
+	stage.state.closeChan = closeChan
+	
+	return stage
 }
 
-func ConnectToBroadcaster(ctx context.Context, state *State) (StateAction[State], error) {
+func ConnectToBroadcaster(ctx context.Context, state *BRState) (StateAction[BRState], error) {
 	addr := net.JoinHostPort(shared.Hostname, strconv.Itoa(shared.Port))
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
@@ -35,55 +56,89 @@ func ConnectToBroadcaster(ctx context.Context, state *State) (StateAction[State]
 	}
 
 	state.conn = conn
-	state.br = NewBroadcast(conn)
-	state.packet = shared.NewPacket()
-	state.pools = make([]string, 0)
-	state.messageHandlers = map[shared.MessageType]StateAction[State]{
-		shared.MessageRetrievePools: HandleRetreivePool,
-		shared.MessageJoinPool: HandlePoolJoin,
-		shared.MessagePoolPingTimeout: HandlePoolPingTimeout,	
-	}
+	state.br = NewBroadcast(conn)	
 
 	return SendRetrievePools, nil 
 }
 
-func SendRetrievePools(ctx context.Context, state *State) (StateAction[State], error) {
-	log.Println("Write Retreiving Pools")
+func SendRetrievePools(ctx context.Context, state *BRState) (StateAction[BRState], error) {
 	err := state.br.SendPoolRetreivalMessage()
 	if err != nil {
 		return nil, err
 	}
+
 	return state.Listen([]shared.MessageType{shared.MessageRetrievePools})
 }
 
-func HandleRetreivePool(ctx context.Context, state *State) (StateAction[State], error) {
-	log.Println("Read Retreiving Pools")
-	str, _ := state.packet.ReadString()
-	state.pools = strings.Split(str, " ") 
-	log.Println("Available Pools", state.pools)
+func HandleRetreivePool(ctx context.Context, state *BRState) (StateAction[BRState], error) {
+	rawPools, err := state.packet.ReadString()
+	if err != nil {
+		return nil, err
+	}
+
+	state.Pools = strings.Split(rawPools, " ") 
+	log.Println(rawPools)
+
+	return HandleAfterPoolRetrieval, nil 
+}
+
+func HandleAfterPoolRetrieval(ctx context.Context, state *BRState) (StateAction[BRState], error) {
+	typ, args := state.onConnection()
+	switch typ {
+	case BRCreatePool:
+		err := state.br.SendPoolCreateMessage()
+		if err != nil {
+			return nil, err
+		}
+	case BRJoinPool:
+		err := state.br.SendPoolJoinMessage(args[0])
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return state.Listen([]shared.MessageType{shared.MessageJoinPool})
 }
 
-func HandlePoolJoin(ctx context.Context, state *State) (StateAction[State], error) {
-	log.Println("Read Joining Pool")
+func HandlePoolJoin(ctx context.Context, state *BRState) (StateAction[BRState], error) {
 	pool, err := state.packet.ReadPool()
 	if err != nil {
 		return nil, err
 	}
-	state.currentPool = pool
-	if state.currentPool.YourIP == state.currentPool.HostIP {
-		go HandleSendPoolPing(ctx, state)
+
+	state.CurrentPool = pool
+
+	if state.CurrentPool.YourIP == state.CurrentPool.HostIP {
+		go state.HandlePoolPing(pool.Id, state.closeChan)
+		go state.HandlePingTimeout(state.closeChan)
 	}
-	return state.Listen([]shared.MessageType{shared.MessagePoolPingTimeout})
+
+	return nil, nil
 }
 
-func HandlePoolPingTimeout(ctx context.Context, state *State) (StateAction[State], error) {
-	log.Println("Host timedout")
-	state.currentPool = nil
-	return SendRetrievePools, nil
+func (s *BRState) HandlePoolPing(poolID string, closeChan <-chan struct{}) {
+	limitter := time.Tick(time.Millisecond * 1000 / shared.PoolPingTicks)
+	for {
+		select {
+		case <-closeChan:
+			return
+		case <-limitter:
+			s.br.SendPoolPingMessage(poolID)
+		}
+	}
 }
 
-func (s *State) Listen(to []shared.MessageType) (StateAction[State], error) {	
+func (s *BRState) HandlePingTimeout(closeChan chan<- struct{}) {
+	_, err := s.Listen([]shared.MessageType{shared.MessagePoolPingTimeout})
+	if err != nil {
+		return
+	}
+	closeChan <- struct{}{}
+}
+
+// I do this to filter unexpected unsyncs with the server
+// To assure that the read message is what I want
+func (s *BRState) Listen(to []shared.MessageType) (StateAction[BRState], error) {	
 	var msgType byte 
 	buff := make([]byte, 1024)
 	for {
@@ -101,17 +156,5 @@ func (s *State) Listen(to []shared.MessageType) (StateAction[State], error) {
 		}
 		log.Println("Read message", msgType)
 	}	
-	return s.messageHandlers[shared.MessageType(msgType)], nil
-}
-
-func HandleSendPoolPing(ctx context.Context, state *State) {
-	limitter := time.Tick(time.Millisecond * 1000 / shared.PoolPingTicks)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-limitter:
-			state.br.SendPoolPingMessage(state.currentPool.Id)
-		}
-	}
+	return s.listenHandler[shared.MessageType(msgType)], nil
 }
