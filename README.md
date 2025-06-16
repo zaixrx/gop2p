@@ -5,7 +5,7 @@ package main
 
 import (
 	"log"
-  P2P "p2p/main/p2p"
+	P2P "p2p/main/p2p"
 	Broadcast "p2p/main/broadcast"
 )
 
