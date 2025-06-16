@@ -1,6 +1,6 @@
 # Example
 
-```
+```go
 package main
 
 import (
@@ -25,22 +25,22 @@ func main() {
 	}
 	log.Println("Created Pool:", currentPool)
 
-  ctx, cancel := context.WithCancel(context.Background())
-  defer cancel()
-
-  go br.Ping(ctx, cancel) // Used to keep the pool alive
-
-  p2p := P2P.CreateP2P(pool)
-  go p2p.Start(ctx, cancel)
-
-  // "newConnection" is a built-in message type along with dozens of other messages
-  p2p.On("newConnection", func(from string, _ *P2P.Packet) {
-    p2p.Send("ping", from, nil)
-  })
-
-  p2p.On("ping", func(from string, _ *P2P.Packet) {
-    log.Println("Recieved ping from %s")
-  })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
+	go br.Ping(ctx, cancel) // Used to keep the pool alive
+	
+	p2p := P2P.CreateP2P(pool)
+	go p2p.Start(ctx, cancel)
+	
+	// "newConnection" is a built-in message type along with dozens of other messages
+	p2p.On("newConnection", func(from string, _ *P2P.Packet) {
+		p2p.Send("ping", from, nil)
+	})
+	
+	p2p.On("ping", func(from string, _ *P2P.Packet) {
+		log.Println("Recieved ping from %s")
+	})
 }
 ```
 
