@@ -3,7 +3,6 @@ package main
 import (
 	"net"
 	"fmt"
-	"strings"
 	"p2p/shared"
 	"github.com/google/uuid"
 )
@@ -38,7 +37,19 @@ func HandlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server
 		keys[i] = key
 		i++
 	}
-	p.WriteString(strings.Join(keys, " "))
+
+	fmt.Println("Write String Arr")
+
+	err := p.WriteStringArr(keys)
+	keys, err = p.ReadStringArr()
+	err = p.WriteStringArr(keys)
+	
+	fmt.Println("Wrote String Arr")
+
+	if err != nil {
+		return err
+	}
+	
 	server.Write(p.GetBytes(), addr)
 
 	return nil

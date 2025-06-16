@@ -59,6 +59,13 @@ func (p *Packet) ReadString() (string, error) {
 	}
 	return string(dat), nil
 }
+func (p *Packet) ReadStringArr() ([]string, error) {
+	arrRaw, err := p.ReadString()
+	if err != nil {
+		return nil, nil
+	}
+	return strings.Split(arrRaw, " "), nil
+}
 func (p *Packet) ReadPool() (*PublicPool, error) {
 	poolID, err := p.ReadString()
 	if err != nil {
@@ -72,7 +79,7 @@ func (p *Packet) ReadPool() (*PublicPool, error) {
 	if err != nil {
 		return nil, err
 	}
-	peerIPs, err := p.ReadString()
+	peerIPs, err := p.ReadStringArr()
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +87,7 @@ func (p *Packet) ReadPool() (*PublicPool, error) {
 		Id: poolID,
 		HostIP: hostIP,
 		YourIP: yourIP,
-		PeerIPs: strings.Split(peerIPs, " "),
+		PeerIPs: peerIPs,
 	}, nil
 }
 
@@ -100,11 +107,14 @@ func (p *Packet) WriteString(dat string) error {
 	p.data = append(p.data, []byte(dat)...)
 	return nil
 }
+func (p *Packet) WriteStringArr(dat []string) error {
+	return p.WriteString(strings.Join(dat, " "))
+}
 func (p *Packet) WritePool(dat *PublicPool) error {
 	p.WriteString(dat.Id)
 	p.WriteString(dat.HostIP)
 	p.WriteString(dat.YourIP)
-	p.WriteString(strings.Join(dat.PeerIPs, " "))
+	p.WriteStringArr(dat.PeerIPs)
 	return nil
 }
 func (p *Packet) GetBytes() []byte {
