@@ -115,7 +115,14 @@ func HandleRetrievePools(s *state, o *output) (machine.StateJob[state, output], 
 		state: s,
 		output: o,
 	}
-	return js.UserListen([]EMessageType{EMessageRetrievePools})
+
+	for {
+		next, err := js.UserListen([]EMessageType{EMessageRetrievePools})
+		if err != nil {
+			return HandleRetrievePools, err	
+		}
+		return next, nil
+	}
 }
 
 func HandleJoinPool(s *state, o *output)(machine.StateJob[state, output], error) {
@@ -123,33 +130,50 @@ func HandleJoinPool(s *state, o *output)(machine.StateJob[state, output], error)
 		state: s,
 		output: o,
 	}
-	return js.UserListen([]EMessageType{EMessageCreatePool, EMessageJoinPool})
+
+	for {
+		next, err := js.UserListen([]EMessageType{EMessageCreatePool, EMessageJoinPool})
+		if err != nil {
+			return HandleJoinPool, err	
+		}
+		return next, nil
+	}
 }
 
 func (js *jobState) UserListen(toWhat []EMessageType)(machine.StateJob[state, output], error) {
+	var err error
+
 	for {
 		emsg := <-js.state.emsg
 
 		// Validation
 		if !slices.Contains(toWhat, emsg.msgType) {
-			js.state.eerr <- fmt.Errorf("ERROR: invalid message type")
+			err = fmt.Errorf("ERROR: unvalid operation at the current state, valid op codes are : %v", toWhat)
+			js.state.eerr <- err
+			return nil, err
 		}
 
 		switch emsg.msgType {
 		case EMessageJoinPool:
 			if len(emsg.args) != 1 {
-				js.state.eerr <- fmt.Errorf("ERROR: expected poolID(string) got %d args", len(emsg.args))
+				err = fmt.Errorf("ERROR: expected poolID(string) got %d args", len(emsg.args))
+				js.state.eerr <- err
+				return nil, err
 			}
 
 			// Send network call
-			err := js.state.nm.SendJoinPool(emsg.args[0])
+			err = js.state.nm.SendJoinPool(emsg.args[0])
 			if err != nil {
 				js.state.eerr <- err
+				return nil, err
 			}
 			
 			// Listen for response
 			next, err := js.NetworkListen([]shared.MessageType{shared.MessageJoinPool})
 			js.state.eerr <- err
+			if err != nil {
+				return nil, err
+			}
 
 			return next, nil
 		case EMessageCreatePool:

@@ -49,7 +49,7 @@ func (sm *StateMachine[t_state, t_output]) Run() {
 		default:
 			job, err = job(&sm.state, &sm.output)
 			if err != nil {
-				log.Printf("ERROR %d: %s", i, err)
+				log.Println(err)
 				// TODO: make onError event subscriber
 			}
 			if job == nil {
