@@ -1,21 +1,10 @@
 # Example
 
-package main
-
-import (
-	"os"
-	"log"
-	"bufio"
-	"context"
-	"p2p/shared"
-	"p2p/main/p2p"
-	"p2p/main/broadcast"
-)
-
+```go
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	br := Broadcast.CreateBroadcast(shared.Hostname, shared.Port)
+	br := Broadcast.CreateBroadcast(BRHostname, BRPort)
 	go br.Start(ctx)
 
 	defer func () {
@@ -28,25 +17,25 @@ func main() {
 		log.Fatal(err)
 	}
 
-    pool, err = br.JoinPool(pools[0])
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    go br.Ping(ctx)
-
-    peer := P2P.CreatePeer(Port)
-    peers, err := peer.ConnectToPool(pool) 
-
-    go func() {
-        for {
-            p, err := peer.Accept()
-            if err != nil {
-                continue
-            }
-            peers = append(peers, peer) 
-        }
-    }()
+	pool, err = br.JoinPool(pools[0])
+	if err != nil {
+	log.Fatal(err)
+	}
+	
+	go br.Ping(ctx)
+	
+	peer := P2P.CreatePeer(Port)
+	peers, err := peer.ConnectToPool(pool) 
+	
+	go func() {
+		for {
+		    p, err := peer.Accept()
+		    if err != nil {
+			continue
+		    }
+		    peers = append(peers, peer) 
+		}
+	}()
 
 	peer.On("msg", func(from *P2P.Peer, pack *P2P.Packet) {
 		msg, err := pack.ReadString()
@@ -57,16 +46,18 @@ func main() {
 		log.Println(msg)
 	})
 }
+```
 
 # Source Code
 
 br from p2p/main/broadcast:
 
 implements a broadcasting manager that has a set of methods that acts as RPCs
-
+```go
 br.RetrievePools() ([]string, error)
 br.SendCreatePool() (*PublicPool, error)
 br.SendJoinPool(poolID string) (*PublicPool, error)
+```
 
 # Resources
 
