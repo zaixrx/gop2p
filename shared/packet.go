@@ -7,16 +7,22 @@ import (
 )
 
 type Packet struct {
+	consume bool
 	data []byte
 	offset uint32  
 }
 
 func NewPacket() *Packet {
 	return &Packet{
+		consume: true,
 		data: make([]byte, 0),
 		offset: 0,
 	}
 }
+func (p *Packet) SetConsume(consume bool) {
+	p.consume = consume
+}
+
 func (p *Packet) Load(data []byte) {
 	p.data = make([]byte, len(data))
 	copy(p.data, data)
@@ -27,12 +33,14 @@ func (p *Packet) Get(n uint32) ([]byte, error) {
 	if length == 0 {
 		return nil, fmt.Errorf("ERROR: attempting to read empty packet")
 	}
-	p.offset += n
-	if p.offset > length { 
-		p.offset = length - 1
-		return nil, fmt.Errorf("ERROR: out of bound by %d", p.offset - length)
+	if p.offset + n > length { 
+		return nil, fmt.Errorf("ERROR: out of bound by %d elements", p.offset + n - length)
 	}
-	return p.data[p.offset - n:p.offset], nil
+	dat := p.data[p.offset : n + p.offset]
+	if p.consume {
+		p.offset += n
+	}
+	return dat, nil
 }
 func (p *Packet) ReadByte() (byte, error) {
 	dat, err := p.Get(1) 
@@ -115,6 +123,14 @@ func (p *Packet) WritePool(dat *PublicPool) error {
 	p.WriteString(dat.HostIP)
 	p.WriteString(dat.YourIP)
 	p.WriteStringArr(dat.PeerIPs)
+	return nil
+}
+func (p *Packet) WriteBytesBefore(dat []byte) error {
+	p.data = append(dat, p.data...)
+	return nil
+}
+func (p *Packet) WriteBytesAfter(dat []byte) error {
+	p.data = append(p.data, dat...)
 	return nil
 }
 func (p *Packet) GetBytes() []byte {

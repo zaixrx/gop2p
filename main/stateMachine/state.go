@@ -8,38 +8,30 @@ import (
 // I created a state machine system because I needed to listen to certain events
 // on a fixed chronological order, I know it poses certain limitations but atleast structure of programming
 // to the use but hey! that's how the tool is made(And I'm too far into this shit to just scrap the idea)
-type StateJob[t_state, t_output any] func(s *t_state, o *t_output) (StateJob[t_state, t_output], error)
+type StateJob[t_job_state any] func(ctx context.Context, s *t_job_state) (StateJob[t_job_state], error)
 
-type StateMachine[t_state, t_output any] struct {
- 	initJob StateJob[t_state, t_output]
-	output t_output 
-	state t_state 
+type StateMachine[t_job_state any] struct {
+ 	initJob StateJob[t_job_state]
+	state t_job_state 
 }
 
-func NewStateMachine[state, output any](initState state, initJob StateJob[state, output]) *StateMachine[state, output] {
-	return &StateMachine[state, output]{
+func NewStateMachine[t_job_state any](initState t_job_state, initJob StateJob[t_job_state]) *StateMachine[t_job_state] {
+	return &StateMachine[t_job_state]{
 		state: initState,
 		initJob: initJob,
 	}
 }
 
-func (sm *StateMachine[t_state, t_output]) GetState() t_state {
+func (sm *StateMachine[t_job_state]) GetState() t_job_state {
 	return sm.state
 }
 
-func (sm *StateMachine[t_state, t_output]) GetOutput() t_output {
-	return sm.output
-}
-
 // This must be run in the main goroutine as the return type imposes
-func (sm *StateMachine[t_state, t_output]) Run() {
+func (sm *StateMachine[t_job_state]) Run(ctx context.Context) {
 	var (
-		job StateJob[t_state, t_output] = sm.initJob
+		job StateJob[t_job_state] = sm.initJob
 		err error
 	)
-
-	ctx, cancel := context.WithCancel(context.Background())	
-	defer cancel() 
 	
 	i := 0
 	for {
@@ -47,7 +39,7 @@ func (sm *StateMachine[t_state, t_output]) Run() {
 		case <-ctx.Done():
 			return
 		default:
-			job, err = job(&sm.state, &sm.output)
+			job, err = job(ctx, &sm.state)
 			if err != nil {
 				log.Println(err)
 				// TODO: make onError event subscriber

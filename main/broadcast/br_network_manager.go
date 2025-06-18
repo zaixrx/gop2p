@@ -30,6 +30,10 @@ func (nw *NetworkManager) Connect() error {
 	return nil
 }
 
+func (nw *NetworkManager) Close() error {
+	return nw.conn.Close()
+}
+
 func (nw *NetworkManager) Listen() (*shared.Packet, error) {
 	buff := make([]byte, 1024)
 	n, err := nw.conn.Read(buff)
