@@ -1,48 +1,62 @@
 # Example
 
-```
 package main
 
 import (
-    "log"
-    P2P "p2p/main/p2p"
-	Broadcast "p2p/main/broadcast"
+	"os"
+	"log"
+	"bufio"
+	"context"
+	"p2p/shared"
+	"p2p/main/p2p"
+	"p2p/main/broadcast"
 )
 
 func main() {
-	br := Broadcast.CreateBroadcast()
-	go br.Start()
+	ctx, cancel := context.WithCancel(context.Background())
 
-	pools, err := br.RetrievePools()
+	br := Broadcast.CreateBroadcast(shared.Hostname, shared.Port)
+	go br.Start(ctx)
+
+	defer func () {
+		br.Stop()
+		cancel()
+	}()
+
+	pools, err := br.RetreivePools()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Available Pools", pools)
 
-	currentPool, err := br.SendCreatePool()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("Created Pool:", currentPool)
+    pool, err = br.JoinPool(pools[0])
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+    go br.Ping(ctx)
 
-    go br.Ping(ctx, cancel) // Used to keep the pool alive
+    peer := P2P.CreatePeer(Port)
+    peers, err := peer.ConnectToPool(pool) 
 
-    p2p := P2P.CreateP2P(pool)
-    go p2p.Start(ctx, cancel)
+    go func() {
+        for {
+            p, err := peer.Accept()
+            if err != nil {
+                continue
+            }
+            peers = append(peers, peer) 
+        }
+    }()
 
-    // "newConnection" is a built-in message type along with dozens of other messages
-    p2p.On("newConnection", func(from string, _ *P2P.Packet) {
-        p2p.Send("ping", from, nil)
-    })
-
-    p2p.On("ping", func(from string, _ *P2P.Packet) {
-        log.Println("Recieved ping from %s")
-    })
+	peer.On("msg", func(from *P2P.Peer, pack *P2P.Packet) {
+		msg, err := pack.ReadString()
+		if err != nil {
+			log.Printf("Received invalid message from %s", from)
+			return
+		}
+		log.Println(msg)
+	})
 }
-```
 
 # Source Code
 
