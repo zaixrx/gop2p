@@ -24,41 +24,43 @@ func main() {
 
 	pool, err = br.JoinPool(pools[0])
 	if err != nil {
-        log.Fatal(err)
+        	log.Fatal(err)
 	}
     
-    if peer.HostIP == peer.YourIP {
-        go br.Ping(ctx)
-    }
+    	if peer.HostIP == peer.YourIP {
+        	go br.Ping(ctx)
+    	}
 	
 	handle := P2P.CreateHandle()
-	peers, err := peer.ConnectToPool(pool, handlePeer) 
+	peers, err := peer.ConnectToPool(pool, handlePeer)
 
-    for _, p := range peers {
-        handlePeer(p)
-    }
+    	handlePeer = func(paddr string) {
+	        peer := peers[paddr]
+	
+	        peer.On("msg", func(packet *P2P.Packet) {
+	            msg, err := packet.ReadString()
+	            log.Println(msg)
+	        }
 
-    handlePeer = func(paddr string) {
-        peer := peers[paddr]
+		packet := P2P.NewPacket()
+		packet.WriteString("Hello, World!\r\n")
+	        peer.Send("msg", packet)
 
-        peer.On("msg", func(packet *P2P.Packet) {
-            msg, err := packet.ReadString()
-            log.Println(msg)
-        }
-
-        peer.Send("msg", P2P.NewPacket("hello"))
-
-        handle.HandlePeerIO(peer)
+        	handle.HandlePeerIO(peer)
 	}
 
-    for {
-        peer, err := handle.Accept()
-        if err != nil {
-            continue
-        }
-        peers[peer.Addr] = peer
-        handlePeer(peer.Addr)
-    }	
+    	for _, p := range peers {
+        	handlePeer(p)
+    	}
+
+	for {
+        	peer, err := handle.Accept()
+        	if err != nil {
+            		continue
+        	}
+        	peers[peer.Addr] = peer
+        	handlePeer(peer.Addr)
+    	}
 }
 ```
 
