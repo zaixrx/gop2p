@@ -1,13 +1,14 @@
-package Broadcast
+package broadcast
 
 import (
-	"fmt"
-	"time"
-	"errors"
-	"slices"
 	"context"
-	"p2p/shared"
-	machine "p2p/main/stateMachine"
+	"errors"
+	"fmt"
+	"slices"
+	"time"
+
+	machine "github.com/zaixrx/gop2p/core/stateMachine"
+	"github.com/zaixrx/gop2p/shared"
 )
 
 type externalMessage struct {
@@ -45,18 +46,26 @@ func CreateBroadcast(hostName string, port uint16) *stateMachine {
 func ConnectToBroadcaster(ctx context.Context, js *t_job_state) (machine.StateJob[t_job_state], error) {
 	err := js.nm.Connect()
 	if err != nil {
-		// Terminating error 
+		// Terminating error
 		return nil, err 
 	}
-	return HandleUserCmds, nil 
+	return HandleUserCmds, nil
 }
 
 func HandleUserCmds(ctx context.Context, js *t_job_state)(machine.StateJob[t_job_state], error) {
-	for {
-		_, err := js.UserListen([]EMessageType{EMessageRetrievePools, EMessageCreatePool, EMessageJoinPool})
-		if err != nil {
-			return HandleUserCmds, err	
-		}
+	next, err := js.UserListen([]EMessageType{EMessageRetrievePools, EMessageCreatePool, EMessageJoinPool})
+	if err != nil {
+		return HandleUserCmds, err	
+	}
+
+	return next, nil
+}
+
+func HandleClosing(ctx context.Context, js *t_job_state)(machine.StateJob[t_job_state], error) {
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	default:
 		return HandleUserCmds, nil
 	}
 }
@@ -155,7 +164,7 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 					return nil, err
 				}
 				js.pools = pools
-				return HandleUserCmds, nil
+				return HandleClosing, nil
 			case shared.MessageJoinPool:
 				pool, err := packet.ReadPool()
 				if err != nil {
@@ -163,14 +172,14 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 				}
 
 				js.currentPool = pool
-				return HandleUserCmds, nil
+				return HandleClosing, nil
 			case shared.MessageError:
 				msg, err := packet.ReadString()
 				if err != nil {
 					return nil, err
 				}
 
-				return nil, errors.New(msg)
+				return HandleClosing, errors.New(msg)
 			}
 		}
 	}

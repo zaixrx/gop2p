@@ -1,4 +1,5 @@
-package P2P
+package p2p
+
 /*
 This is here for historical reasons only
 
@@ -27,7 +28,7 @@ type t_job_state struct {
 
 	port uint16
 	pool *shared.PublicPool
-	
+
 	// TODO: logger for errors
 	// and who the fuck cares about logging, if it works it works
 	// if it deosn't? fuck you!
@@ -51,7 +52,7 @@ func CreateP2P(pool *shared.PublicPool, port uint16) *stateMachine {
 	}, ConnectToAvailablePeers))
 }
 
-func ConnectToAvailablePeers(ctx context.Context, js *t_job_state) (machine.StateJob[t_job_state], error) {	
+func ConnectToAvailablePeers(ctx context.Context, js *t_job_state) (machine.StateJob[t_job_state], error) {
 	err := js.nm.Listen(fmt.Sprintf(":%d", js.port))
 	if err != nil {
 		return nil, err
@@ -106,10 +107,10 @@ func HandleSentMessages(ctx context.Context, js *t_job_state) {
 }
 
 func (js *t_job_state) HandlePeer(pid string) {
-	conn := js.peers[pid]	
-	
+	conn := js.peers[pid]
+
 	for {
-		msg, err := conn.Read()	
+		msg, err := conn.Read()
 		if err != nil {
 			js.DisconnectPeer(pid)
 			return
@@ -181,12 +182,12 @@ func (sm *stateMachine)Send(to string, msg string, packet *shared.Packet) error 
 	prePacket.WriteString(to)
 	prePacket.WriteString(msg)
 	prePacket.WriteBytesAfter(packet.GetBytes())
-	
+
 	state.sendQLock.Lock()
 	state.sendQ = append(state.sendQ, &P2PMessage{
 		packet: prePacket,
 	})
-	state.sendQLock.Unlock()	
+	state.sendQLock.Unlock()
 
 	return nil
 }

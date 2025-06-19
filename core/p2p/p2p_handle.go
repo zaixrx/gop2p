@@ -1,20 +1,22 @@
-package P2P
+package p2p
 
 import (
-	"fmt"
-	"time"
-	"sync"
-	"errors"
-	"strings"
 	"context"
-	"p2p/shared"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/zaixrx/gop2p/logging"
+	"github.com/zaixrx/gop2p/shared"
 )
 
 type Handle struct {
 	ctx context.Context
 	cancel context.CancelFunc
-
 	nm *network_manager
+	Logger logging.Logger
 }
 
 func CreateHandle() *Handle {
@@ -23,6 +25,7 @@ func CreateHandle() *Handle {
 		ctx: ctx,
 		cancel: cancel,
 		nm: NewNetworkManager(),
+		Logger: logging.NewStdLogger(),
 	}
 }
 
@@ -59,18 +62,24 @@ func (h *Handle) ConnectToPool(pool *shared.PublicPool) (map[string]*Peer, error
 }
 
 func (h *Handle) Listen(port uint16) error {
-	return h.nm.Listen(fmt.Sprintf(":%d", port))
+	err := h.nm.Listen(fmt.Sprintf(":%d", port))
+	if err != nil {
+		return err
+	}
+	h.Logger.Info("Listening on port %d\n", port)
+	return nil
 }
 
 func (h *Handle) Accept() (*Peer, error) {
 	if !h.nm.listening {
-		return nil, fmt.Errorf("You must listen before accepting new peers, dumb ass!")
+		return nil, fmt.Errorf("you must listen before accepting new peers")
 	}
 	conn, err := h.nm.Accept()
 	if err != nil {
 		return nil, err
 	}
 	p := newPeer(h.ctx, &conn)
+	h.Logger.Debug("Accepted new connection %s\n", p.Addr)
 	return p, nil
 }
 
@@ -78,6 +87,7 @@ func (h *Handle) Close() error {
 	h.cancel()	
 	err := h.nm.Close()
 	h.nm = nil
+	h.Logger.Info("Closed peer listener\n")
 	return err
 }
 
@@ -105,7 +115,9 @@ func newPeer(parentCtx context.Context, conn *t_conn) *Peer {
 		conn: conn,
 		
 		sendQ: make([]*Packet, 0),
-		handlers: make(map[string]func(*Packet)),
+		handlers: map[string]func(*Packet){
+			DisconnectedMessage: handlerZeroValue,
+		},
 
 		ctx: ctx,
 		ctxCancel: cancel,
@@ -124,16 +136,15 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 		for {
 			select {
 			case <-p.ctx.Done():
-				fmt.Println(h.nm.listening)
 				return
 			case <-limitter:
 				for _, packet := range p.sendQ {
-					_, err := conn.Write(packet)
+					nbw, err := conn.Write(packet)
 					if err != nil {
-						fmt.Println("Failed to send message")
+						h.Logger.Warn("failed to send message to %s\n", p.Addr)
 						continue
 					}
-					fmt.Println("Sent message")
+					h.Logger.Debug("sent message of size %d to %s\n", nbw, p.Addr)
 				}
 				p.sendQ = p.sendQ[:0] 
 			}
@@ -162,11 +173,11 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 					continue // TODO: error
 				}
 
-				fmt.Println("Read result message")
+				h.Logger.Debug("read message from %s\n", p.Addr)
 
 				handler, exists := p.handlers[msgType]
 				if !exists {
-					fmt.Println("ERROR: invalid message type, handler doesn't exist")
+					h.Logger.Error("invalid message type, handler doesn't exist from %s", p.Addr)
 					continue
 				}
 
@@ -186,7 +197,6 @@ func (p *Peer) Send(msg string, packet *Packet) error { // Need to register sent
 	return nil
 }
 func (p *Peer) On(msg string, handler func(data *Packet)) { // Needs read new packets from this peer
-	fmt.Println("Set", msg)
 	p.handlersLock.Lock()
 	p.handlers[msg] = handler
 	p.handlersLock.Unlock()

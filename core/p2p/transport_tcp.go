@@ -1,8 +1,8 @@
-package P2P
+package p2p
 
 import (
-	"net"
 	"fmt"
+	"net"
 )
 
 type tcp_transport struct {
@@ -51,7 +51,6 @@ func newTcpConn(conn net.Conn) *tcp_conn {
 }
 
 func (conn *tcp_conn) Write(packet *Packet) (int, error) {
-	fmt.Println("Connection Write")
 	return conn.conn.Write(packet.GetBytes())
 }
 
@@ -59,23 +58,19 @@ func (conn *tcp_conn) Read() (*Packet, error) {
 	nbr, err := conn.conn.Read(conn.buff)
 	if nbr == 0 || err != nil {
 		fmt.Println(nbr, len(conn.buff))
-		return nil, fmt.Errorf("tcp socket sent fin flag!") 
+		return nil, fmt.Errorf("tcp socket sent fin flag") 
 	}
 
 	packet := NewPacket()
 	packet.Load(conn.buff[:nbr])
 
-	fmt.Println("Connection Read")
-
 	return packet, nil
 }
 
 func (conn *tcp_conn) Address() string {
-	fmt.Println("Connection Address")
 	return conn.conn.RemoteAddr().String()
 }
 
 func (conn *tcp_conn) Close() error {
-	fmt.Println("Connection Closed")
-	return conn.Close()
+	return conn.conn.Close()
 }

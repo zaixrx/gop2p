@@ -1,22 +1,29 @@
+// This provides a comprehensive example of this implementation
 package main
 
 import (
-	"os"
-	"log"
-	"fmt"
-	"net"
 	"bufio"
-	"strconv"
 	"context"
-	"p2p/shared"
-	"p2p/main/p2p"
-	"p2p/main/broadcast"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"strconv"
+
+	broadcast "github.com/zaixrx/gop2p/core/broadcast"
+	p2p "github.com/zaixrx/gop2p/core/p2p"
+	"github.com/zaixrx/gop2p/shared"
+)
+
+const (
+	BRHostname string = "127.0.0.1"
+	BRPort     uint16 = 6969
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	br := Broadcast.CreateBroadcast(shared.Hostname, shared.Port)
+	br := broadcast.CreateBroadcast(BRHostname, BRPort)
 	go br.Start(ctx)
 
 	defer func () {
@@ -46,7 +53,7 @@ func main() {
 				}
 				return	
 			case "join":
-				if poolIDs == nil || len(poolIDs) == 0 {
+				if len(poolIDs) == 0 {
 					log.Println("ERROR: no pools to join.")
 					continue
 				}
@@ -74,26 +81,23 @@ func main() {
 
 	/////////////////////////////////////////////////////////////////////////////
 
-	handle := P2P.CreateHandle()
+	handle := p2p.CreateHandle()
 	peers, _ := handle.ConnectToPool(pool)
 
 	handlePeer := func(paddr string) {
-		log.Println("New peer!", paddr)
-
 		p, exists := peers[paddr]
 		if !exists {
 			return
 		}
 
-		p.On("msg", func(p *P2P.Packet) {
+		p.On("msg", func(p *p2p.Packet) {
 			r, err := p.ReadString()
 			if err != nil {
 				return
 			}
 			log.Println(r)
 		})
-		p.On(P2P.DisconnectedMessage, func(_ *P2P.Packet) {
-			log.Println("Peer disconnected")
+		p.On(p2p.DisconnectedMessage, func(_ *p2p.Packet) {
 			delete(peers, p.Addr)
 
 			if p.Addr == pool.HostIP {
@@ -119,8 +123,6 @@ func main() {
 		log.Panic(err)
 	}
 
-	log.Printf("Listening on port %d", port) 
-
 	for {
 		p, err := handle.Accept()
 		if err != nil {
@@ -130,7 +132,7 @@ func main() {
 		peers[p.Addr] = p
 		handlePeer(p.Addr)
 
-		packet := P2P.NewPacket()
+		packet := p2p.NewPacket()
 		packet.WriteString(fmt.Sprintf("I got your ip bitch! haha %s", p.Addr))
 
 		p.Send("msg", packet)

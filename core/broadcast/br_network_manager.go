@@ -1,26 +1,27 @@
-package Broadcast 
+package broadcast
 
 import (
 	"net"
 	"strconv"
-	"p2p/shared"
+
+	"github.com/zaixrx/gop2p/shared"
 )
 
 type NetworkManager struct {
 	port uint16
-	hostName string
+	hostname string
 	conn net.Conn
 }
 
-func NewNetworkManager(hostName string, port uint16) *NetworkManager {	
+func NewNetworkManager(hostname string, port uint16) *NetworkManager {	
 	return &NetworkManager{
-		hostName: hostName,
+		hostname: hostname,
 		port: port,
 	}
 }
 
 func (nw *NetworkManager) Connect() error {
-	addr := net.JoinHostPort(shared.Hostname, strconv.Itoa(shared.Port))
+	addr := net.JoinHostPort(nw.hostname, strconv.Itoa(int(nw.port)))
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
 		return err

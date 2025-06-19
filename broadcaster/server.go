@@ -1,39 +1,61 @@
-package main
+package broadcaster
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"p2p/shared"
 	"sync"
 	"time"
+
+	"github.com/zaixrx/gop2p/logging"
+	"github.com/zaixrx/gop2p/shared"
 )
 
-type MessageHandler func(*shared.Packet, *net.UDPAddr, *Server) error 
+type messageHandler func(*shared.Packet, *net.UDPAddr, *Server) error 
 
 type Server struct {
 	conn *net.UDPConn
 
 	mux sync.Mutex
 	pools map[string]*shared.ServerPool
-
-	handler map[shared.MessageType]MessageHandler 
+	handler map[shared.MessageType]messageHandler 
+	
+	PingPoolTimeout time.Duration
+	Logger logging.Logger
 }
 
-func NewServer(conn *net.UDPConn) *Server {
+func NewServer(pingPoolTimeout int) *Server {
 	return &Server{
-		conn: conn,
+		Logger: logging.NewStdLogger(),
 		pools: make(map[string]*shared.ServerPool),
-		handler: map[shared.MessageType]MessageHandler {
-			shared.MessageRetrievePools: HandlePoolRetreivalMessage,
-			shared.MessageCreatePool: HandlePoolCreateMessage,
-			shared.MessageJoinPool: HandlePoolJoinMessage,
-			shared.MessagePoolPing: HandlePoolPingMessage,
+		handler: map[shared.MessageType]messageHandler {
+			shared.MessageRetrievePools: handlePoolRetreivalMessage,
+			shared.MessageCreatePool: handlePoolCreateMessage,
+			shared.MessageJoinPool: handlePoolJoinMessage,
+			shared.MessagePoolPing: handlePoolPingMessage,
 		},
 	}
 }
 
+func (s *Server) Start(hostname string, port int) {
+	addr := net.UDPAddr{
+		IP: net.ParseIP(hostname),
+		Port: port,
+	}
+	conn, err := net.ListenUDP("udp", &addr)
+	if err != nil {
+		s.Logger.Error("Coulnd't listen on %d: %s\n", port, err) 
+	}
+	s.conn = conn
+	s.Logger.Info("Server listening on port %d\n", port) 
+}
+
+func (s *Server) Stop() error {
+	s.Logger.Info("Server stopped")
+	return s.conn.Close()
+}
+
 func (s *Server) Write(b []byte, a *net.UDPAddr) (int, error) {
+	s.Logger.Debug("Wrote message of size %d to %s\n", len(b), a.String()) 
 	return s.conn.WriteToUDP(b, a)
 }
 
@@ -62,7 +84,7 @@ func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
 		return nil
 	}
 
-	log.Printf("Received message %d from %s\n", msgTyp, addr.String())
+	s.Logger.Debug("Received message %d from %s\n", msgTyp, addr.String())
 
 	handler, ok := s.handler[shared.MessageType(msgTyp)]
 	if !ok {
@@ -93,17 +115,17 @@ func (s *Server) MonitorPool(poolID string) {
 		return 
 	}
 
-	log.Printf("Monitoring Pool %v\n", pool.PingChan) 
+	s.Logger.Debug("Monitoring Pool %v\n", pool.PingChan) 
 
 	for {
 		select {
 		case <-pool.PingChan:
 			continue
-		case <-time.After(shared.PoolPingTimeout * time.Second):
+		case <-time.After(s.PingPoolTimeout * time.Second):
 			s.mux.Lock()
 			defer s.mux.Unlock()
 			
-			log.Printf("Pool %s host's timedout\n", poolID)
+			s.Logger.Debug("Pool %s host's timedout\n", poolID)
 
 			packet := shared.NewPacket()
 			packet.WriteByte(byte(shared.MessagePoolPingTimeout))

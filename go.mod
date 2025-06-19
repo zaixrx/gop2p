@@ -1,4 +1,4 @@
-module p2p
+module github.com/zaixrx/gop2p
 
 go 1.24.4
 

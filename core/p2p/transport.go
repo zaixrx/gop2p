@@ -1,7 +1,7 @@
-package P2P 
+package p2p
 
 import (
-	"p2p/shared"
+	"github.com/zaixrx/gop2p/shared"
 )
 
 type Packet = shared.Packet

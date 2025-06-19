@@ -1,4 +1,4 @@
-package P2P
+package p2p
 
 type network_manager struct {
 	listening bool

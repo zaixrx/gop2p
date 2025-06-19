@@ -1,13 +1,14 @@
-package main
+package broadcaster
 
 import (
-	"net"
 	"fmt"
-	"p2p/shared"
+	"net"
+
 	"github.com/google/uuid"
+	"github.com/zaixrx/gop2p/shared"
 )
 
-func HandlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
+func handlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
 	server.mux.Lock()
 	defer server.mux.Unlock()
 
@@ -25,7 +26,7 @@ func HandlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *S
 	return nil
 }
 
-func HandlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
+func handlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
 	server.mux.Lock()
 	defer server.mux.Unlock()
 
@@ -49,7 +50,7 @@ func HandlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server
 	return nil
 }
 
-func HandlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
+func handlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
 	server.mux.Lock()
 	defer server.mux.Unlock()
 
@@ -73,7 +74,7 @@ func HandlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 	return nil
 }
 
-func HandlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
+func handlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
 	server.mux.Lock()
 	defer server.mux.Unlock()
 
