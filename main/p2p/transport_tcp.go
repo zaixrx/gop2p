@@ -28,9 +28,7 @@ func (tcp *tcp_transport) Accept() (t_conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tcp_conn{
-		conn: conn,
-	}, nil
+	return newTcpConn(conn), nil
 }
 
 func (tcp *tcp_transport) Connect(addr string) (t_conn, error) {
@@ -38,13 +36,18 @@ func (tcp *tcp_transport) Connect(addr string) (t_conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tcp_conn{
-		conn: conn,
-	}, nil
+	return newTcpConn(conn), nil
 }
 
 func (tcp *tcp_transport) Close() error {
 	return tcp.listener.Close()
+}
+
+func newTcpConn(conn net.Conn) *tcp_conn {
+	return &tcp_conn{
+		conn: conn,
+		buff: make([]byte, 1024),
+	}
 }
 
 func (conn *tcp_conn) Write(packet *Packet) (int, error) {
@@ -55,6 +58,7 @@ func (conn *tcp_conn) Write(packet *Packet) (int, error) {
 func (conn *tcp_conn) Read() (*Packet, error) {
 	nbr, err := conn.conn.Read(conn.buff)
 	if nbr == 0 || err != nil {
+		fmt.Println(nbr, len(conn.buff))
 		return nil, fmt.Errorf("tcp socket sent fin flag!") 
 	}
 

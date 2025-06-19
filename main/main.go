@@ -78,14 +78,13 @@ func main() {
 				handle.Close()
 			}
 		})
-
 		handle.HandlePeer(p)
 	}
 
 	for _, p := range peers {
 		handlePeer(p.Addr)
 	}
-	
+
 	go func() {
 		for {
 			_, args := cmdSelect(map[string]int{
@@ -116,7 +115,7 @@ func main() {
 		log.Println("New peer!")
 		peers[p.Addr] = p
 		handlePeer(p.Addr)
-	}	
+	}
 }
 
 func cmdSelect(opts map[string]int) (string, []string) {

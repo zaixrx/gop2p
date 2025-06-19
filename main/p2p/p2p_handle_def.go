@@ -124,6 +124,7 @@ func (h *Handle) HandlePeer(p *Peer) {
 		for {
 			select {
 			case <-p.ctx.Done():
+				fmt.Println(h.nm.listening)
 				return
 			case <-limitter:
 				for _, packet := range p.sendQ {
