@@ -8,19 +8,36 @@ import (
 
 type Packet struct {
 	consume bool
+	writeBefore bool
+
 	data []byte
 	offset uint32  
+}
+
+const str_sep string = " " 
+func joinStrArr(arr []string) string {
+	return strings.Join(arr, str_sep)
+}
+func splitStr(str string) []string {
+	return strings.Split(str, str_sep)
 }
 
 func NewPacket() *Packet {
 	return &Packet{
 		consume: true,
+		writeBefore: false,
 		data: make([]byte, 0),
 		offset: 0,
 	}
 }
-func (p *Packet) SetConsume(consume bool) {
-	p.consume = consume
+
+func (p *Packet) SetConsume(val bool) bool {
+	old := p.consume
+	p.consume = val
+	return old
+}
+func (p *Packet) SetWriteBefore(val bool) {
+	p.writeBefore = val
 }
 
 func (p *Packet) Load(data []byte) {
@@ -72,67 +89,67 @@ func (p *Packet) ReadStringArr() ([]string, error) {
 	if err != nil {
 		return nil, nil
 	}
-	return strings.Split(arrRaw, " "), nil
+	return splitStr(arrRaw), nil
 }
 func (p *Packet) ReadPool() (*PublicPool, error) {
-	poolID, err := p.ReadString()
+	arr, err := p.ReadStringArr()
 	if err != nil {
 		return nil, err
 	}
-	hostIP, err := p.ReadString()
-	if err != nil {
-		return nil, err
+	if len(arr) < 4 {
+		return nil, fmt.Errorf("cannot decode invalid packet(ReadPool)")
 	}
-	yourIP, err := p.ReadString()
-	if err != nil {
-		return nil, err
-	}
-	peerIPs, err := p.ReadStringArr()
-	if err != nil {
-		return nil, err
-	}
+
 	return &PublicPool{
-		Id: poolID,
-		HostIP: hostIP,
-		YourIP: yourIP,
-		PeerIPs: peerIPs,
+		Id: arr[0],
+		HostIP: arr[1],
+		YourIP: arr[2],
+		PeerIPs: arr[3:],
 	}, nil
 }
 
 // TODO: Make read and write mode(packet is either for read or for writing)
-func (p *Packet) WriteByte(dat byte) error {
-	p.data = append(p.data, dat)
+func (p *Packet) appnd (dat []byte) error {
+	if p.writeBefore {
+		p.data = append(dat, p.data...)
+	} else {
+		p.data = append(p.data, dat...)
+	}
 	return nil
+}
+
+func (p *Packet) WriteByte(dat byte) error {
+	p.appnd([]byte{dat})
+	return nil
+}
+func (p *Packet) WriteBytes(dat []byte) error {
+	p.appnd(dat)
+	return nil
+}
+
+func getUint32(dat uint32) []byte {
+	buf := make([]byte, 4) // TODO: this is stupid bad
+	binary.LittleEndian.PutUint32(buf, dat)
+	return buf
 }
 func (p *Packet) WriteUint32(dat uint32) error {
-	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, dat)
-	p.data = append(p.data, buf...)
-	return nil
+	return p.appnd(getUint32(dat))
+}
+
+func getString(dat string) []byte {
+	return append(getUint32(uint32(len(dat))), []byte(dat)...)
 }
 func (p *Packet) WriteString(dat string) error {
-	p.WriteUint32(uint32(len(dat)))
-	p.data = append(p.data, []byte(dat)...)
-	return nil
+	return p.appnd(getString(dat))
 }
 func (p *Packet) WriteStringArr(dat []string) error {
-	return p.WriteString(strings.Join(dat, " "))
+	return p.appnd(getString(joinStrArr(dat)))
 }
+
 func (p *Packet) WritePool(dat *PublicPool) error {
-	p.WriteString(dat.Id)
-	p.WriteString(dat.HostIP)
-	p.WriteString(dat.YourIP)
-	p.WriteStringArr(dat.PeerIPs)
-	return nil
+	return p.WriteStringArr([]string{dat.Id, dat.HostIP, dat.YourIP, joinStrArr(dat.PeerIPs)})
 }
-func (p *Packet) WriteBytesBefore(dat []byte) error {
-	p.data = append(dat, p.data...)
-	return nil
-}
-func (p *Packet) WriteBytesAfter(dat []byte) error {
-	p.data = append(p.data, dat...)
-	return nil
-}
+
 func (p *Packet) GetBytes() []byte {
 	dat := p.data
 	p.Flush()

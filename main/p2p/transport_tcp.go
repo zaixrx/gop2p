@@ -2,6 +2,7 @@ package P2P
 
 import (
 	"net"
+	"fmt"
 )
 
 type tcp_transport struct {
@@ -42,28 +43,35 @@ func (tcp *tcp_transport) Connect(addr string) (t_conn, error) {
 	}, nil
 }
 
-func (tcp *tcp_transport) Close() {
-	tcp.listener.Close()
+func (tcp *tcp_transport) Close() error {
+	return tcp.listener.Close()
 }
 
-func (conn *tcp_conn) Write(msg *P2PMessage) (int, error) {
-	return conn.conn.Write(msg.packet.GetBytes())
+func (conn *tcp_conn) Write(packet *Packet) (int, error) {
+	fmt.Println("Connection Write")
+	return conn.conn.Write(packet.GetBytes())
 }
 
-func (conn *tcp_conn) Read() (*P2PMessage, error) {
+func (conn *tcp_conn) Read() (*Packet, error) {
 	nbr, err := conn.conn.Read(conn.buff)
-	if err != nil {
-		return nil, err
+	if nbr == 0 || err != nil {
+		return nil, fmt.Errorf("tcp socket sent fin flag!") 
 	}
 
 	packet := NewPacket()
 	packet.Load(conn.buff[:nbr])
 
-	return &P2PMessage{
-		packet: packet,
-	}, nil
+	fmt.Println("Connection Read")
+
+	return packet, nil
 }
 
 func (conn *tcp_conn) Address() string {
+	fmt.Println("Connection Address")
 	return conn.conn.RemoteAddr().String()
+}
+
+func (conn *tcp_conn) Close() error {
+	fmt.Println("Connection Closed")
+	return conn.Close()
 }

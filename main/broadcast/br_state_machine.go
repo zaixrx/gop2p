@@ -260,6 +260,10 @@ func (sm *stateMachine) Ping(ctx context.Context) {
 		return
 	}
 
+	if js.currentPool.HostIP != js.currentPool.YourIP {
+		fmt.Println("Only the host can ping")
+	}
+
 	limitter := time.Tick(time.Millisecond * time.Duration(1000 / Ticks))
 	for {
 		select {

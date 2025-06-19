@@ -1,4 +1,6 @@
-// I still haven't decided how to handle to either listen for peers or handle sent messages
+package P2P
+/*
+This is here for historical reasons only
 
 package P2P
 
@@ -188,3 +190,4 @@ func (sm *stateMachine)Send(to string, msg string, packet *shared.Packet) error 
 
 	return nil
 }
+*/

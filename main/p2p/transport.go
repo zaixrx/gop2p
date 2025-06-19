@@ -4,25 +4,22 @@ import (
 	"p2p/shared"
 )
 
-type P2PPacket = shared.Packet
+type Packet = shared.Packet
 
-func NewPacket() *P2PPacket {
+func NewPacket() *Packet {
 	return shared.NewPacket()
-}
-
-type P2PMessage struct {
-	packet *P2PPacket
 }
 
 type t_transport interface {
 	Listen(string) error
 	Accept() (t_conn, error)
 	Connect(string) (t_conn, error)
-	Close()
+	Close() error
 }
 
 type t_conn interface {
-	Write(*P2PMessage) (int, error)
-	Read() (*P2PMessage, error)
+	Write(*Packet) (int, error)
+	Read() (*Packet, error)
 	Address() string
+	Close() error
 }

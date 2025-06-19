@@ -2,7 +2,6 @@ package Broadcast
 
 import (
 	"net"
-	"log"
 	"strconv"
 	"p2p/shared"
 )
@@ -77,8 +76,5 @@ func (nm *NetworkManager) SendPoolPingMessage(poolID string) error {
 	packet.WriteByte(byte(shared.MessagePoolPing))
 	packet.WriteString(poolID)
 	_, err := nm.Write(packet)
-	if err == nil {
-		log.Println("Sending Ping Message")
-	}
 	return err
 }
