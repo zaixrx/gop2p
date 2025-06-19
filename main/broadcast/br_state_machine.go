@@ -25,7 +25,7 @@ const (
 type t_job_state struct {
 	nm *NetworkManager
 
-	emsg chan *externalMessage
+	emsg chan externalMessage
 	eerr chan error
 
 	pools []string
@@ -37,7 +37,7 @@ type stateMachine machine.StateMachine[t_job_state]
 func CreateBroadcast(hostName string, port uint16) *stateMachine {
 	return (*stateMachine)(machine.NewStateMachine(t_job_state{
 		nm: NewNetworkManager(hostName, port),
-		emsg: make(chan *externalMessage),
+		emsg: make(chan externalMessage),
 		eerr: make(chan error),
 	}, ConnectToBroadcaster))
 }
@@ -48,33 +48,17 @@ func ConnectToBroadcaster(ctx context.Context, js *t_job_state) (machine.StateJo
 		// Terminating error 
 		return nil, err 
 	}
-	return HandleRetrievePools, nil 
+	return HandleUserCmds, nil 
 }
 
-func HandleRetrievePools(ctx context.Context, js *t_job_state) (machine.StateJob[t_job_state], error) {	
+func HandleUserCmds(ctx context.Context, js *t_job_state)(machine.StateJob[t_job_state], error) {
 	for {
-		next, err := js.UserListen([]EMessageType{EMessageRetrievePools})
+		_, err := js.UserListen([]EMessageType{EMessageRetrievePools, EMessageCreatePool, EMessageJoinPool})
 		if err != nil {
-			return HandleRetrievePools, err	
+			return HandleUserCmds, err	
 		}
-		return next, nil
+		return HandleUserCmds, nil
 	}
-}
-
-func HandleJoinPool(ctx context.Context, js *t_job_state)(machine.StateJob[t_job_state], error) {
-	for {
-		next, err := js.UserListen([]EMessageType{EMessageCreatePool, EMessageJoinPool})
-		if err != nil {
-			return HandleJoinPool, err	
-		}
-		return next, nil
-	}
-}
-
-func HandleChannelDisposal(ctx context.Context, js *t_job_state)(machine.StateJob[t_job_state], error) {
-	close(js.eerr)
-	close(js.emsg)
-	return nil, nil
 }
 
 func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_state], error) {
@@ -107,7 +91,7 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 			
 			// Listen for response
 			next, err := js.NetworkListen([]shared.MessageType{shared.MessageJoinPool})
-			// Notice that this call allways triggers the external error channel to resume execution
+			// Notice that this call always triggers an external error to resume execution
 			// of the main goroutine
 			js.eerr <- err
 			if err != nil {
@@ -170,9 +154,8 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 				if err != nil {
 					return nil, err
 				}
-
 				js.pools = pools
-				return HandleJoinPool, nil
+				return HandleUserCmds, nil
 			case shared.MessageJoinPool:
 				pool, err := packet.ReadPool()
 				if err != nil {
@@ -180,7 +163,7 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 				}
 
 				js.currentPool = pool
-				return HandleChannelDisposal, nil
+				return HandleUserCmds, nil
 			case shared.MessageError:
 				msg, err := packet.ReadString()
 				if err != nil {
@@ -202,7 +185,7 @@ func (sm *stateMachine) JoinPool(poolID string) (*shared.PublicPool, error) {
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState() 
 
-	js.emsg <- &externalMessage{
+	js.emsg <- externalMessage{
 		msgType: EMessageJoinPool,
 		args: []string{poolID},
 	}
@@ -221,7 +204,7 @@ func (sm *stateMachine) CreatePool() (*shared.PublicPool, error) {
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState()
 
-	js.emsg <- &externalMessage{
+	js.emsg <- externalMessage{
 		msgType: EMessageCreatePool,
 		args: []string{},
 	}
@@ -234,11 +217,11 @@ func (sm *stateMachine) CreatePool() (*shared.PublicPool, error) {
 	return rawSM.GetState().currentPool, nil
 }
 
-func (sm *stateMachine) RetreivePools() ([]string, error) {
+func (sm *stateMachine) GetPoolIDs() ([]string, error) {
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState()
 
-	js.emsg <- &externalMessage{
+	js.emsg <- externalMessage{
 		msgType: EMessageRetrievePools,
 		args: []string{},
 	}
@@ -271,7 +254,7 @@ func (sm *stateMachine) Ping(ctx context.Context) {
 			// TODO: this can happen if the broadcaster shuts down without expection
 			// or in a performance dropdown where client doesn't send ping message
 			// so you must either throw and error, or reconnect to the broadcaster
-			fmt.Println("Closed Ping")
+			fmt.Println("Stopped pinging")
 			return
 		case <-limitter:
 			js.nm.SendPoolPingMessage(js.currentPool.Id)
@@ -280,9 +263,14 @@ func (sm *stateMachine) Ping(ctx context.Context) {
 }
 
 func (sm *stateMachine) Stop() error {
+	fmt.Printf("Broadcaster stopped")
+
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState()
 
+	close(js.eerr)
+	close(js.emsg)
+	
 	err := js.nm.Close()
 	js.nm = nil
 	

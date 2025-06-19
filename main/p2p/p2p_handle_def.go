@@ -116,7 +116,7 @@ func newPeer(parentCtx context.Context, conn *t_conn) *Peer {
 
 // Bridge between handle and peer
 // Listens for new packets
-func (h *Handle) HandlePeer(p *Peer) {
+func (h *Handle) HandlePeerIO(p *Peer) {
 	conn := *p.conn
 
 	go func() {

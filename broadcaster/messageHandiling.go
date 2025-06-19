@@ -38,13 +38,7 @@ func HandlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server
 		i++
 	}
 
-	fmt.Println("Write String Arr")
-
 	err := p.WriteStringArr(keys)
-	keys, err = p.ReadStringArr()
-	err = p.WriteStringArr(keys)
-	
-	fmt.Println("Wrote String Arr")
 
 	if err != nil {
 		return err

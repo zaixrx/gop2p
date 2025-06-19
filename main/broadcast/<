@@ -3,11 +3,10 @@ package main
 import (
 	"os"
 	"log"
-	"fmt"
-	"net"
 	"bufio"
-	"strconv"
 	"context"
+	"strings"
+	"strconv"
 	"p2p/shared"
 	"p2p/main/p2p"
 	"p2p/main/broadcast"
@@ -24,47 +23,41 @@ func main() {
 		cancel()
 	}()
 
+	c, _ := cmdSelect(map[string]int{
+		"list": 0,
+		"create": 0,
+		"join": 0,
+	})
+
 	var (
 		err error
 		poolIDs []string
 		pool *shared.PublicPool
 	)
-
-	func () {
-		
-		for {
-			c, _ := cmdSelect(map[string]int{
-				"list": 0,
-				"create": 0,
-				"join": 0,
-			})
-			switch c {
-			case "create":
-				pool, err = br.CreatePool()
-				if err != nil {
-					log.Fatal("ERROR: ",err)
-				}
-				return	
-			case "join":
-				if poolIDs == nil || len(poolIDs) == 0 {
-					log.Println("ERROR: no pools to join.")
-					continue
-				}
-				log.Printf("Join? %d %v", len(poolIDs), poolIDs)
-				pool, err = br.JoinPool(poolIDs[0])
-				if err != nil {
-					log.Println("ERROR: invalid join pool", err)
-				}
-				return
-			case "list":
-				poolIDs, err = br.GetPoolIDs()
-				if err != nil {
-					log.Println("ERROR: couldn't list pools", err)
-				}
-				log.Printf("Pools: %v", poolIDs)
-			}
+	
+	readCMD:
+	switch c {
+	case "create":
+		pool, err = br.CreatePool()
+		if err != nil {
+			log.Fatal("CREATE_POOL:",err)
 		}
-	}()
+	case "join":
+		if poolIDs == nil || len(poolIDs) == 0 {
+			log.Println("ERROR: no pools to join.")
+			goto readCMD
+		}
+		pool, err = br.JoinPool(poolIDs[0])
+		if err != nil {
+			log.Fatal("JOIN Pool", err)
+		}
+	case "list":
+		poolIDs, err = br.GetPoolIDs()
+		if err != nil {
+			log.Println("GET_POOL_IDS:", err)
+			goto readCMD
+		}
+	}
 
 	log.Println("Joined Pool With Peers", pool.PeerIPs)
 
@@ -78,7 +71,7 @@ func main() {
 	peers, _ := handle.ConnectToPool(pool)
 
 	handlePeer := func(paddr string) {
-		log.Println("New peer!", paddr)
+		log.Println("New peer!")
 
 		p, exists := peers[paddr]
 		if !exists {
@@ -86,10 +79,7 @@ func main() {
 		}
 
 		p.On("msg", func(p *P2P.Packet) {
-			r, err := p.ReadString()
-			if err != nil {
-				return
-			}
+			r, _ := p.ReadString()
 			log.Println(r)
 		})
 		p.On(P2P.DisconnectedMessage, func(_ *P2P.Packet) {
@@ -108,31 +98,20 @@ func main() {
 	for _, p := range peers {
 		handlePeer(p.Addr)
 	}
-	
-	port, err := extractPort(pool.YourIP)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	err = handle.Listen(port)
+	port, err := strconv.Atoi(strings.Split(pool.YourIP, ":")[1])
+	err = handle.Listen(uint16(port))
 	if err != nil {
 		log.Panic(err)
 	}
-
-	log.Printf("Listening on port %d", port) 
-
+	log.Println("Listening on port", port) 
 	for {
-		p, err := handle.Accept()
-		if err != nil {
-			log.Printf("ERROR: couldn't accept connection %s", err.Error())
-		}
-
+		p, _ := handle.Accept()
 		peers[p.Addr] = p
 		handlePeer(p.Addr)
 
 		packet := P2P.NewPacket()
-		packet.WriteString(fmt.Sprintf("I got your ip bitch! haha %s", p.Addr))
-
+		packet.WriteString(fmt.Sprintf("I got your ip bitch! haha %s", p.Addr()))
 		p.Send("msg", packet)
 	}
 }
@@ -141,7 +120,6 @@ func cmdSelect(opts map[string]int) (string, []string) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		log.Printf("Enter value from %v", opts)
 		cmd, err := reader.ReadString('\n')
 		if err != nil {
 			continue		
@@ -163,13 +141,4 @@ func cmdSelect(opts map[string]int) (string, []string) {
 		
 		return cmd, args
 	}
-}
-
-func extractPort(addr string) (uint16, error) {
-	_, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		return 0, err
-	}
-	port, err := strconv.Atoi(portStr)
-	return uint16(port), err
 }

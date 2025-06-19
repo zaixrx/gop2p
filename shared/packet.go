@@ -19,6 +19,9 @@ func joinStrArr(arr []string) string {
 	return strings.Join(arr, str_sep)
 }
 func splitStr(str string) []string {
+	if len(str) == 0 {
+		return []string{}
+	}
 	return strings.Split(str, str_sep)
 }
 
