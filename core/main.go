@@ -31,8 +31,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	br := broadcast.CreateHandle(ctx)
 
-	err = br.Connect(BRHostname, BRPort)
-	if err != nil {
+	if err = br.Connect(BRHostname, BRPort); err != nil {
 		log.Panic(err)
 	}
 
