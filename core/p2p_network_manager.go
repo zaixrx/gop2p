@@ -1,13 +1,17 @@
 package p2p
 
+import (
+	tr "github.com/zaixrx/gop2p/core/transport"
+)
+
 type network_manager struct {
 	listening bool
-	transport t_transport
+	transport tr.Transport
 }
 
 func NewNetworkManager() *network_manager {
 	return &network_manager{
-		transport: &tcp_transport{}, // TODO: Implement UDP transport
+		transport: &tr.TCPTransport{}, // TODO: Implement UDP transport
 	}
 }
 
@@ -16,7 +20,7 @@ func (nm *network_manager) Listen(addr string) error {
 	return nm.transport.Listen(addr)
 }
 
-func (nm *network_manager) Accept() (t_conn, error) {
+func (nm *network_manager) Accept() (tr.Conn, error) {
 	conn, err := nm.transport.Accept()
 	if err != nil {
 		return nil, err
@@ -24,7 +28,7 @@ func (nm *network_manager) Accept() (t_conn, error) {
 	return conn, nil
 }
 
-func (nm *network_manager) Connect(addr string) (t_conn, error) {
+func (nm *network_manager) Connect(addr string) (tr.Conn, error) {
 	return nm.transport.Connect(addr)
 }
 

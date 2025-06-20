@@ -1,20 +1,20 @@
-package p2p
+package transport
 
 import (
 	"fmt"
 	"net"
 )
 
-type tcp_transport struct {
+type TCPTransport struct {
 	listener net.Listener
 }
 
-type tcp_conn struct {
+type TCPConn struct {
 	conn net.Conn
 	buff []byte
 }
 
-func (tcp *tcp_transport) Listen(addr string) error {
+func (tcp *TCPTransport) Listen(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -23,7 +23,7 @@ func (tcp *tcp_transport) Listen(addr string) error {
 	return nil
 }
 
-func (tcp *tcp_transport) Accept() (t_conn, error) {
+func (tcp *TCPTransport) Accept() (Conn, error) {
 	conn, err := tcp.listener.Accept()
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func (tcp *tcp_transport) Accept() (t_conn, error) {
 	return newTcpConn(conn), nil
 }
 
-func (tcp *tcp_transport) Connect(addr string) (t_conn, error) {
+func (tcp *TCPTransport) Connect(addr string) (Conn, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -39,22 +39,22 @@ func (tcp *tcp_transport) Connect(addr string) (t_conn, error) {
 	return newTcpConn(conn), nil
 }
 
-func (tcp *tcp_transport) Close() error {
+func (tcp *TCPTransport) Close() error {
 	return tcp.listener.Close()
 }
 
-func newTcpConn(conn net.Conn) *tcp_conn {
-	return &tcp_conn{
+func newTcpConn(conn net.Conn) *TCPConn {
+	return &TCPConn{
 		conn: conn,
 		buff: make([]byte, 1024),
 	}
 }
 
-func (conn *tcp_conn) Write(packet *Packet) (int, error) {
+func (conn *TCPConn) Write(packet *Packet) (int, error) {
 	return conn.conn.Write(packet.GetBytes())
 }
 
-func (conn *tcp_conn) Read() (*Packet, error) {
+func (conn *TCPConn) Read() (*Packet, error) {
 	nbr, err := conn.conn.Read(conn.buff)
 	if nbr == 0 || err != nil {
 		fmt.Println(nbr, len(conn.buff))
@@ -67,10 +67,10 @@ func (conn *tcp_conn) Read() (*Packet, error) {
 	return packet, nil
 }
 
-func (conn *tcp_conn) Address() string {
+func (conn *TCPConn) Address() string {
 	return conn.conn.RemoteAddr().String()
 }
 
-func (conn *tcp_conn) Close() error {
+func (conn *TCPConn) Close() error {
 	return conn.conn.Close()
 }

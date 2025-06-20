@@ -1,4 +1,4 @@
-package p2p
+package transport
 
 import (
 	"github.com/zaixrx/gop2p/shared"
@@ -10,14 +10,14 @@ func NewPacket() *Packet {
 	return shared.NewPacket()
 }
 
-type t_transport interface {
+type Transport interface {
 	Listen(string) error
-	Accept() (t_conn, error)
-	Connect(string) (t_conn, error)
+	Accept() (Conn, error)
+	Connect(string) (Conn, error)
 	Close() error
 }
 
-type t_conn interface {
+type Conn interface {
 	Write(*Packet) (int, error)
 	Read() (*Packet, error)
 	Address() string

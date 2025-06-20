@@ -10,9 +10,8 @@ import (
 	"os"
 	"strconv"
 
+	p2p "github.com/zaixrx/gop2p/core"
 	broadcast "github.com/zaixrx/gop2p/core/broadcast"
-	p2p "github.com/zaixrx/gop2p/core/p2p"
-	"github.com/zaixrx/gop2p/shared"
 )
 
 const (
@@ -25,7 +24,7 @@ func main() {
 	var (
 		err error
 		poolIDs []string = []string{}
-		pool *shared.PublicPool
+		pool *p2p.PublicPool
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())

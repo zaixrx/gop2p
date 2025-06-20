@@ -8,15 +8,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zaixrx/gop2p/core/transport"
 	"github.com/zaixrx/gop2p/logging"
 	"github.com/zaixrx/gop2p/shared"
 )
+
 
 type Handle struct {
 	ctx context.Context
 	cancel context.CancelFunc
 	nm *network_manager
 	Logger logging.Logger
+}
+
+type PublicPool = shared.PublicPool
+type Packet = shared.Packet
+func NewPacket() *shared.Packet {
+	return shared.NewPacket()
 }
 
 func CreateHandle() *Handle {
@@ -38,7 +46,7 @@ func (h *Handle) ConnectToPeer(addr string) (*Peer, error) {
 	return peer, nil 
 }
 
-func (h *Handle) ConnectToPool(pool *shared.PublicPool) (map[string]*Peer, error) {
+func (h *Handle) ConnectToPool(pool *PublicPool) (map[string]*Peer, error) {
 	peers := make(map[string]*Peer)
 	builder := strings.Builder{}
 
@@ -97,25 +105,25 @@ type Peer struct {
 	ctx context.Context
 	ctxCancel context.CancelFunc
 
-	conn *t_conn
+	conn *transport.Conn
 	
 	handlersLock sync.Mutex
-	handlers map[string]func(*Packet)
+	handlers map[string]func(*transport.Packet)
 
 	sendQLock sync.Mutex
-	sendQ []*Packet
+	sendQ []*transport.Packet
 }
 
 const DisconnectedMessage string = "disconnected"
-var handlerZeroValue func(*Packet) = func(_ *Packet) {}
+var handlerZeroValue func(*transport.Packet) = func(_ *transport.Packet) {}
 
-func newPeer(parentCtx context.Context, conn *t_conn) *Peer {
+func newPeer(parentCtx context.Context, conn *transport.Conn) *Peer {
 	ctx, cancel := context.WithCancel(parentCtx)
 	return &Peer{
 		conn: conn,
 		
-		sendQ: make([]*Packet, 0),
-		handlers: map[string]func(*Packet){
+		sendQ: make([]*transport.Packet, 0),
+		handlers: map[string]func(*transport.Packet){
 			DisconnectedMessage: handlerZeroValue,
 		},
 
@@ -187,7 +195,7 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 	}()
 }
 
-func (p *Peer) Send(msg string, packet *Packet) error { // Need to register sent messages and handle them in one go
+func (p *Peer) Send(msg string, packet *transport.Packet) error { // Need to register sent messages and handle them in one go
 	packet.SetWriteBefore(true)
 	packet.WriteString(msg)
 	packet.SetWriteBefore(false)
@@ -196,7 +204,7 @@ func (p *Peer) Send(msg string, packet *Packet) error { // Need to register sent
 	p.sendQLock.Unlock()
 	return nil
 }
-func (p *Peer) On(msg string, handler func(data *Packet)) { // Needs read new packets from this peer
+func (p *Peer) On(msg string, handler func(data *transport.Packet)) { // Needs read new packets from this peer
 	p.handlersLock.Lock()
 	p.handlers[msg] = handler
 	p.handlersLock.Unlock()
@@ -208,8 +216,9 @@ func (p *Peer) Disconnect() error {
 
 /*
 
-Problems: What should you really do when a peer from a pool fails to connect?
-	  Do retries if a connection doesn't want to be accepted
-	  Why the fuck aren't you batching sent packets and add a pipeline or somthing for e2e
+Problems: 
+		What should you really do when a peer from a pool fails to connect?
+	  	Do retries if a connection doesn't want to be accepted
+	  	Why the fuck aren't you batching sent packets and add a pipeline or somthing for e2e
 */
 
