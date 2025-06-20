@@ -7,11 +7,26 @@ I wrote this library for personal use, as a lot of my projects need it in one wa
 
 Main Program (see [https://github.com/zaixrx/gop2p/blob/main/core/examples/main.go]):
 ```go
+package bytetorrent
+
+import (
+	"log"
+	"context"
+	"github.com/zaixrx/gop2p/core/broadcast"
+	P2P "github.com/zaixrx/gop2p/core/p2p"
+)
+
+const (
+	BRPingTicks = 20
+	BRHostname = "localhost"
+	BRPort = 6969
+)
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	br := broadcast.CreateHandle(ctx)
-	if err = br.Connect(BRHostname, BRPort); err != nil {
+	if err := br.Connect(BRHostname, BRPort); err != nil {
 		log.Panic(err)
 	}
 
@@ -25,7 +40,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	pool, err = br.CreatePool()
+	log.Println(pools)
+
+	pool, err := br.CreatePool()
 	if err != nil {
         	log.Fatal(err)
 	}
@@ -37,14 +54,14 @@ func main() {
 	}
 	
 	handle := P2P.CreateHandle()
-	peers, err := peer.ConnectToPool(pool, handlePeer)
+	peers, err := handle.ConnectToPool(pool)
 
 	if err != nil {
 		handle.Close()
 		log.Fatal(err)
 	}
 
-    	handlePeer = func(paddr string) {
+	handlePeer := func(paddr string) {
 	        peer := peers[paddr]
 	
 	        peer.On("msg", func(packet *P2P.Packet) {
@@ -53,7 +70,7 @@ func main() {
 				return
 			}
 	            	log.Println(msg)
-	        }
+	        })
 
 		packet := P2P.NewPacket()
 		packet.WriteString("Hello, World!\r\n")
@@ -64,7 +81,7 @@ func main() {
 	}
 
     	for _, p := range peers {
-        	handlePeer(p)
+        	handlePeer(p.Addr)
     	}
 
 	for {
