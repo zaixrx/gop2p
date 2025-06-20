@@ -6,6 +6,7 @@ import (
 )
 
 type TCPTransport struct {
+	listening bool
 	listener net.Listener
 }
 
@@ -20,10 +21,14 @@ func (tcp *TCPTransport) Listen(addr string) error {
 		return err
 	}
 	tcp.listener = listener
+	tcp.listening = true
 	return nil
 }
 
 func (tcp *TCPTransport) Accept() (Conn, error) {
+	if !tcp.listening {
+		return nil, fmt.Errorf("tcp_transport is not listening")
+	}
 	conn, err := tcp.listener.Accept()
 	if err != nil {
 		return nil, err
@@ -40,6 +45,10 @@ func (tcp *TCPTransport) Connect(addr string) (Conn, error) {
 }
 
 func (tcp *TCPTransport) Close() error {
+	if !tcp.listening {
+		return fmt.Errorf("tcp_transport is not listening")
+	}
+	tcp.listening = false
 	return tcp.listener.Close()
 }
 

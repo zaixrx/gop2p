@@ -79,9 +79,6 @@ func (h *Handle) Listen(port uint16) error {
 }
 
 func (h *Handle) Accept() (*Peer, error) {
-	if !h.nm.listening {
-		return nil, fmt.Errorf("you must listen before accepting new peers")
-	}
 	conn, err := h.nm.Accept()
 	if err != nil {
 		return nil, err

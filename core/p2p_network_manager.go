@@ -5,7 +5,6 @@ import (
 )
 
 type network_manager struct {
-	listening bool
 	transport tr.Transport
 }
 
@@ -16,7 +15,6 @@ func NewNetworkManager() *network_manager {
 }
 
 func (nm *network_manager) Listen(addr string) error {
-	nm.listening = true 
 	return nm.transport.Listen(addr)
 }
 
@@ -33,6 +31,5 @@ func (nm *network_manager) Connect(addr string) (tr.Conn, error) {
 }
 
 func (nm *network_manager) Close() error {
-	nm.listening = false
 	return nm.transport.Close()
 }

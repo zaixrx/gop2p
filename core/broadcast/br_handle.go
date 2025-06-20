@@ -70,61 +70,67 @@ func (h *Handle) handleUserRPCs() error {
 	for {
 		emsg := <-h.emsg
 
-		h.Logger.Debug("received RPC initiating call, for message of type %s...", emsg.msgType.String())
-
-		// Validation
-		switch emsg.msgType {
-		case EMessageJoinPool:
-			if len(emsg.args) != 1 {
-				err = fmt.Errorf("expected poolID(string) got %d args", len(emsg.args))
-				h.eerr <- err
-				continue
-			}
-
-			// Send network call
-			err = h.nm.SendJoinPool(emsg.args[0])
-			if err != nil {
-				h.eerr <- err
-				continue
-			}
-			
-			// Listen for response
-			// Notice that this call always triggers an external error to resume execution
-			// of the main goroutine
-			h.eerr <- h.networkListen([]shared.MessageType{shared.MessageJoinPool})
-		case EMessageCreatePool:
-			if len(emsg.args) != 0 {
-				h.eerr <- fmt.Errorf("expected no args got %d", len(emsg.args))
-				continue
-			}
-
-			// Send network call
-			err := h.nm.SendCreatePool()
-			if err != nil {
-				h.eerr <- err
-				continue
-			}
-
-			// Listen for response
-			h.eerr <- h.networkListen([]shared.MessageType{shared.MessageJoinPool})
-		case EMessageRetrievePools:
-			if len(emsg.args) != 0 {
-				h.eerr <- fmt.Errorf("expected no args got %d", len(emsg.args))
-				continue
-			}
-
-			// Send network call
-			err := h.nm.SendRetrievePools()
-			if err != nil {
-				h.eerr <- err
-				continue
-			}
-
-			// Listen for response
-			h.eerr <- h.networkListen([]shared.MessageType{shared.MessageRetrievePools})
+		select {
+		case <-h.ctx.Done():
+			h.Logger.Info("context done, stopping RPC handler...")
+			h.Close()
+			return nil 
 		default:
-			h.eerr <- fmt.Errorf("unknown message type")
-		}
+			h.Logger.Debug("received RPC initiating call, for message of type %s...", emsg.msgType.String())
+			// Validation
+			switch emsg.msgType {
+			case EMessageJoinPool:
+				if len(emsg.args) != 1 {
+					err = fmt.Errorf("expected poolID(string) got %d args", len(emsg.args))
+					h.eerr <- err
+					continue
+				}
+
+				// Send network call
+				err = h.nm.SendJoinPool(emsg.args[0])
+				if err != nil {
+					h.eerr <- err
+					continue
+				}
+				
+				// Listen for response
+				// Notice that this call always triggers an external error to resume execution
+				// of the main goroutine
+				h.eerr <- h.networkListen([]shared.MessageType{shared.MessageJoinPool})
+			case EMessageCreatePool:
+				if len(emsg.args) != 0 {
+					h.eerr <- fmt.Errorf("expected no args got %d", len(emsg.args))
+					continue
+				}
+
+				// Send network call
+				err := h.nm.SendCreatePool()
+				if err != nil {
+					h.eerr <- err
+					continue
+				}
+
+				// Listen for response
+				h.eerr <- h.networkListen([]shared.MessageType{shared.MessageJoinPool})
+			case EMessageRetrievePools:
+				if len(emsg.args) != 0 {
+					h.eerr <- fmt.Errorf("expected no args got %d", len(emsg.args))
+					continue
+				}
+
+				// Send network call
+				err := h.nm.SendRetrievePools()
+				if err != nil {
+					h.eerr <- err
+					continue
+				}
+
+				// Listen for response
+				h.eerr <- h.networkListen([]shared.MessageType{shared.MessageRetrievePools})
+			default:
+				h.eerr <- fmt.Errorf("unknown message type")
+			}
+		}	
 	}
 }
 
@@ -175,6 +181,10 @@ func (h *Handle) networkListen(toWhat []shared.MessageType) error {
 }
 
 func (h *Handle) Close() error {
+	if h.nm == nil {
+		return nil
+	}
+
 	h.Logger.Info("closed connection with the broadcaster")
 
 	err := h.nm.Close()
