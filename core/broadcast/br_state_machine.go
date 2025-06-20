@@ -1,4 +1,6 @@
 package broadcast
+/*
+this is here for historical reasons
 
 import (
 	"context"
@@ -57,7 +59,6 @@ func HandleUserCmds(ctx context.Context, js *t_job_state)(machine.StateJob[t_job
 	if err != nil {
 		return HandleUserCmds, err	
 	}
-
 	return next, nil
 }
 
@@ -80,7 +81,7 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 		if !slices.Contains(toWhat, emsg.msgType) {
 			err = fmt.Errorf("ERROR: unvalid operation at the current state, valid op codes are : %v", toWhat)
 			js.eerr <- err
-			return nil, err
+			return HandleClosing, err
 		}
 
 		switch emsg.msgType {
@@ -88,14 +89,14 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 			if len(emsg.args) != 1 {
 				err = fmt.Errorf("ERROR: expected poolID(string) got %d args", len(emsg.args))
 				js.eerr <- err
-				return nil, err
+				return HandleClosing, err
 			}
 
 			// Send network call
 			err = js.nm.SendJoinPool(emsg.args[0])
 			if err != nil {
 				js.eerr <- err
-				return nil, err
+				return HandleClosing, err
 			}
 			
 			// Listen for response
@@ -104,7 +105,7 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 			// of the main goroutine
 			js.eerr <- err
 			if err != nil {
-				return nil, err
+				return HandleClosing, err
 			}
 
 			return next, nil
@@ -117,7 +118,9 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 			err := js.nm.SendCreatePool()
 			if err != nil {
 				js.eerr <- err
+				return HandleClosing, nil
 			}
+
 			// Listen for response
 			next, err := js.NetworkListen([]shared.MessageType{shared.MessageJoinPool})
 			js.eerr <- err
@@ -132,6 +135,7 @@ func (js *t_job_state) UserListen(toWhat []EMessageType)(machine.StateJob[t_job_
 			err := js.nm.SendRetrievePools()
 			if err != nil {
 				js.eerr <- err
+				return HandleClosing, nil
 			}
 
 			// Listen for response
@@ -149,6 +153,7 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 	for {
 		packet, err := js.nm.Listen()
 		if err != nil {
+			// Terminating Error
 			return nil, err
 		}
 		byt, err := packet.ReadByte()
@@ -161,32 +166,30 @@ func (js *t_job_state) NetworkListen(toWhat []shared.MessageType)(machine.StateJ
 			case shared.MessageRetrievePools:
 				pools, err := packet.ReadStringArr()
 				if err != nil {
-					return nil, err
+					return HandleClosing, err
 				}
 				js.pools = pools
 				return HandleClosing, nil
 			case shared.MessageJoinPool:
 				pool, err := packet.ReadPool()
 				if err != nil {
-					return nil, err
+					return HandleClosing, err
 				}
-
 				js.currentPool = pool
 				return HandleClosing, nil
 			case shared.MessageError:
 				msg, err := packet.ReadString()
 				if err != nil {
-					return nil, err
+					return HandleClosing, nil 
 				}
-
 				return HandleClosing, errors.New(msg)
 			}
 		}
 	}
 }
 
-func (sm *stateMachine) Start(ctx context.Context) {	
-	(*machine.StateMachine[t_job_state])(sm).Run(ctx)
+func (sm *stateMachine) Start(ctx context.Context, onError func(error, bool)) {	
+	(*machine.StateMachine[t_job_state])(sm).Run(ctx, onError)
 }
 
 // This runs on a different goroutine as the state machine
@@ -243,8 +246,7 @@ func (sm *stateMachine) GetPoolIDs() ([]string, error) {
 	return rawSM.GetState().pools, nil	
 }
 
-const Ticks int = 10
-func (sm *stateMachine) Ping(ctx context.Context) {
+func (sm *stateMachine) Ping(ctx context.Context, ticks int) {
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState()
 
@@ -253,17 +255,16 @@ func (sm *stateMachine) Ping(ctx context.Context) {
 	}
 
 	if js.currentPool.HostIP != js.currentPool.YourIP {
-		fmt.Println("Only the host can ping")
+		return
 	}
 
-	limitter := time.Tick(time.Millisecond * time.Duration(1000 / Ticks))
+	limitter := time.Tick(time.Millisecond * time.Duration(1000 / ticks))
 	for {
 		select {
 		case <-ctx.Done():
 			// TODO: this can happen if the broadcaster shuts down without expection
 			// or in a performance dropdown where client doesn't send ping message
 			// so you must either throw and error, or reconnect to the broadcaster
-			fmt.Println("Stopped pinging")
 			return
 		case <-limitter:
 			js.nm.SendPoolPingMessage(js.currentPool.Id)
@@ -272,8 +273,6 @@ func (sm *stateMachine) Ping(ctx context.Context) {
 }
 
 func (sm *stateMachine) Stop() error {
-	fmt.Printf("Broadcaster stopped")
-
 	rawSM := (*machine.StateMachine[t_job_state])(sm)
 	js := rawSM.GetState()
 
@@ -285,3 +284,4 @@ func (sm *stateMachine) Stop() error {
 	
 	return err 
 }
+*/

@@ -7,7 +7,7 @@ var server *broadcaster.Server
 
 const (
 	Port int = 6969
-	PoolPingTimeout int = 5
+	PoolPingTimeout int = 1
 	Hostname string = "127.0.0.1"
 )
 

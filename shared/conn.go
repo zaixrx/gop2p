@@ -16,3 +16,6 @@ const (
 	MessagePoolPingTimeout
 )
 
+func (mt MessageType) String() string {
+	return [...]string{"CreatePool", "Pool Ping", "Retrieve Pools", "Join Pool", "Error", "Pool Ping Timeout"}[mt]
+}

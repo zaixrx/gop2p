@@ -12,7 +12,7 @@ type StdLogger struct {
 }
 
 func NewStdLogger() *StdLogger {
-	return &StdLogger{ level: LevelInfo | LevelError }
+	return &StdLogger{ level: LevelInfo | LevelError | LevelDebug | LevelWarn }
 }
 
 func (l *StdLogger) SetLevel(level Level) {

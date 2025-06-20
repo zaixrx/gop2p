@@ -1,7 +1,6 @@
 package stateMachine 
 
 import (
-	"log"
 	"context"
 )
 
@@ -27,7 +26,7 @@ func (sm *StateMachine[t_job_state]) GetState() t_job_state {
 }
 
 // This must be run in the main goroutine as the return type imposes
-func (sm *StateMachine[t_job_state]) Run(ctx context.Context) {
+func (sm *StateMachine[t_job_state]) Run(ctx context.Context, onError func(error, bool)) {
 	var (
 		job StateJob[t_job_state] = sm.initJob
 		err error
@@ -41,8 +40,7 @@ func (sm *StateMachine[t_job_state]) Run(ctx context.Context) {
 		default:
 			job, err = job(ctx, &sm.state)
 			if err != nil {
-				log.Println(err)
-				// TODO: make onError event subscriber
+				onError(err, job == nil)
 			}
 			if job == nil {
 				return 

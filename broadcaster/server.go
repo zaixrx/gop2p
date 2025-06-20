@@ -15,8 +15,10 @@ type messageHandler func(*shared.Packet, *net.UDPAddr, *Server) error
 type Server struct {
 	conn *net.UDPConn
 
-	mux sync.Mutex
+	poolsLock sync.Mutex
 	pools map[string]*shared.ServerPool
+
+	// handler map is static, so it's thread safe!
 	handler map[shared.MessageType]messageHandler 
 	
 	PingPoolTimeout time.Duration
@@ -25,6 +27,7 @@ type Server struct {
 
 func NewServer(pingPoolTimeout int) *Server {
 	return &Server{
+		PingPoolTimeout: time.Duration(pingPoolTimeout),
 		Logger: logging.NewStdLogger(),
 		pools: make(map[string]*shared.ServerPool),
 		handler: map[shared.MessageType]messageHandler {
@@ -55,7 +58,7 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) Write(b []byte, a *net.UDPAddr) (int, error) {
-	s.Logger.Debug("Wrote message of size %d to %s\n", len(b), a.String()) 
+	//s.Logger.Debug("Wrote message of size %d to %s\n", len(b), a.String()) 
 	return s.conn.WriteToUDP(b, a)
 }
 
@@ -84,7 +87,7 @@ func (s *Server) handleMessage(dat []byte, addr *net.UDPAddr) error {
 		return nil
 	}
 
-	s.Logger.Debug("Received message %d from %s\n", msgTyp, addr.String())
+	//s.Logger.Debug("Received message %d from %s\n", msgTyp, addr.String())
 
 	handler, ok := s.handler[shared.MessageType(msgTyp)]
 	if !ok {
@@ -109,31 +112,30 @@ func (s *Server) reportError(err error, to *net.UDPAddr) error {
 	return serr 
 }
 
-func (s *Server) MonitorPool(poolID string) {
+func (s *Server) monitorPool(poolID string) {
 	pool, err := s.GetPool(poolID)
 	if err != nil {
 		return 
 	}
 
 	s.Logger.Debug("Monitoring Pool %v\n", pool.PingChan) 
-
 	for {
 		select {
-		case <-pool.PingChan:
-			continue
 		case <-time.After(s.PingPoolTimeout * time.Second):
-			s.mux.Lock()
-			defer s.mux.Unlock()
-			
-			s.Logger.Debug("Pool %s host's timedout\n", poolID)
+			s.Logger.Debug("Pool %s timedout\n", poolID)
 
 			packet := shared.NewPacket()
 			packet.WriteByte(byte(shared.MessagePoolPingTimeout))
 
 			s.Write(packet.GetBytes(), pool.Peers[pool.HostID])
 
+			s.poolsLock.Lock()
 			delete(s.pools, poolID)
+			s.poolsLock.Unlock()
+
 			return
+		case <-pool.PingChan:
+			continue
 		}
 	}
 }

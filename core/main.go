@@ -18,57 +18,65 @@ import (
 const (
 	BRHostname string = "127.0.0.1"
 	BRPort     uint16 = 6969
+	BRPingTicks int = 10
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	br := broadcast.CreateBroadcast(BRHostname, BRPort)
-	go br.Start(ctx)
-
-	defer func () {
-		br.Stop()
-		cancel()
-	}()
-
 	var (
 		err error
-		poolIDs []string
+		poolIDs []string = []string{}
 		pool *shared.PublicPool
 	)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	br := broadcast.CreateHandle(ctx)
+
+	err = br.Connect(BRHostname, BRPort)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	defer func () {
+		br.Close()
+		cancel()
+	}()
+
 	func () {
-		
 		for {
 			c, _ := cmdSelect(map[string]int{
 				"list": 0,
 				"create": 0,
 				"join": 0,
 			})
+
 			switch c {
 			case "create":
 				pool, err = br.CreatePool()
 				if err != nil {
-					log.Fatal("ERROR: ",err)
-				}
-				return	
-			case "join":
-				if len(poolIDs) == 0 {
-					log.Println("ERROR: no pools to join.")
+					log.Printf("ERROR: %s\n", err)
 					continue
 				}
-				log.Printf("Join? %d %v", len(poolIDs), poolIDs)
+				return
+			case "join":
+				if len(poolIDs) == 0 {
+					log.Printf("ERROR: no pools to join\n")
+					continue
+				}
+
 				pool, err = br.JoinPool(poolIDs[0])
 				if err != nil {
-					log.Println("ERROR: invalid join pool", err)
+					log.Printf("ERROR: invalid join pool %s\n", err)
+					continue
 				}
+
 				return
 			case "list":
 				poolIDs, err = br.GetPoolIDs()
 				if err != nil {
-					log.Println("ERROR: couldn't list pools", err)
+					log.Printf("ERROR: couldn't list pools %s\n", err)
+					continue
 				}
-				log.Printf("Pools: %v", poolIDs)
+				log.Println(poolIDs)
 			}
 		}
 	}()
@@ -76,7 +84,7 @@ func main() {
 	log.Println("Joined Pool With Peers", pool.PeerIPs)
 
 	if pool.HostIP == pool.YourIP {
-		go br.Ping(ctx)
+		go br.Ping(ctx, BRPingTicks)
 	}
 
 	/////////////////////////////////////////////////////////////////////////////

@@ -8,20 +8,15 @@ import (
 )
 
 type NetworkManager struct {
-	port uint16
-	hostname string
 	conn net.Conn
 }
 
-func NewNetworkManager(hostname string, port uint16) *NetworkManager {	
-	return &NetworkManager{
-		hostname: hostname,
-		port: port,
-	}
+func NewNetworkManager() *NetworkManager {	
+	return &NetworkManager{}
 }
 
-func (nw *NetworkManager) Connect() error {
-	addr := net.JoinHostPort(nw.hostname, strconv.Itoa(int(nw.port)))
+func (nw *NetworkManager) Connect(hostname string, port uint16) error {
+	addr := net.JoinHostPort(hostname, strconv.Itoa(int(port)))
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
 		return err

@@ -9,13 +9,16 @@ import (
 )
 
 func handlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
-	server.mux.Lock()
-	defer server.mux.Unlock()
-
 	key := uuid.New().String()
 	pool := shared.NewPool(key, addr)
+
+	server.poolsLock.Lock()
 	server.pools[key] = pool 
-	go server.MonitorPool(key)
+	server.poolsLock.Unlock()
+
+	server.Logger.Debug("created new pool")
+
+	go server.monitorPool(key)
 
 	p := shared.NewPacket()
 	p.WriteByte(byte(shared.MessageJoinPool))
@@ -27,8 +30,8 @@ func handlePoolCreateMessage(packet *shared.Packet, addr *net.UDPAddr, server *S
 }
 
 func handlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
-	server.mux.Lock()
-	defer server.mux.Unlock()
+	server.poolsLock.Lock()
+	defer server.poolsLock.Unlock()
 
 	p := shared.NewPacket()
 	p.WriteByte(byte(shared.MessageRetrievePools))
@@ -40,7 +43,6 @@ func handlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server
 	}
 
 	err := p.WriteStringArr(keys)
-
 	if err != nil {
 		return err
 	}
@@ -51,9 +53,6 @@ func handlePoolRetreivalMessage(packet *shared.Packet, addr *net.UDPAddr, server
 }
 
 func handlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
-	server.mux.Lock()
-	defer server.mux.Unlock()
-
 	key, err := packet.ReadString()
 	if err != nil {
 		return err
@@ -75,9 +74,6 @@ func handlePoolJoinMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 }
 
 func handlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Server) error {
-	server.mux.Lock()
-	defer server.mux.Unlock()
-
 	poolID, err := packet.ReadString()
 	if err != nil {
 		return err
@@ -93,6 +89,7 @@ func handlePoolPingMessage(packet *shared.Packet, addr *net.UDPAddr, server *Ser
 	}
 
 	pool.PingChan<-struct{}{}
+	server.Logger.Debug("pinged pool %v\n", pool.PingChan)
 
 	return nil
 }
