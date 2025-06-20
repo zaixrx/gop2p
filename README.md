@@ -5,7 +5,7 @@ I wrote this library for personal use, as a lot of my projects need it in one wa
 
 # Example
 
-Main Program:
+Main Program (see [https://github.com/zaixrx/gop2p/blob/main/core/main.go]):
 ```go
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -78,13 +78,8 @@ func main() {
 }
 ```
 
-Broadcasting Server:
-```
-package main
-import (
-	"github.com/zaixrx/gop2p/broadcaster"
-)
-
+Broadcasting Server (see[https://github.com/zaixrx/gop2p/blob/main/core/main.go]):
+```go
 var server *broadcaster.Server
 
 const (
