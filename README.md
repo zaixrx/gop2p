@@ -1,5 +1,3 @@
-There is no better documentation than the source code
-
 # Disclamer
 I wrote this library for personal use, as a lot of my projects need it in one way or another, which means that I will still update this as I'm making my other project inshaa'allah, you are encouraged to contribute! just don't change the core systems
 
