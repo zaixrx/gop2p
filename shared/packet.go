@@ -34,6 +34,9 @@ func NewPacket() *Packet {
 	}
 }
 
+func (p *Packet) GetLen() int {
+	return len(p.data)
+}
 func (p *Packet) SetConsume(val bool) bool {
 	old := p.consume
 	p.consume = val

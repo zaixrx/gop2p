@@ -19,19 +19,21 @@ type Handle struct {
 	cancel context.CancelFunc
 	nm *network_manager
 	Logger logging.Logger
+	onDisconnect func()
 }
 
 type PublicPool = shared.PublicPool
 type Packet = shared.Packet
-func NewPacket() *shared.Packet {
+func NewPacket() *Packet {
 	return shared.NewPacket()
 }
 
-func CreateHandle() *Handle {
-	ctx, cancel := context.WithCancel(context.Background())
+func CreateHandle(pctx context.Context, onDisconnect func()) *Handle {
+	ctx, cancel := context.WithCancel(pctx)
 	return &Handle{
 		ctx: ctx,
 		cancel: cancel,
+		onDisconnect: onDisconnect,
 		nm: NewNetworkManager(),
 		Logger: logging.NewStdLogger(),
 	}
@@ -56,9 +58,10 @@ func (h *Handle) ConnectToPool(pool *PublicPool) (map[string]*Peer, error) {
 		}
 		peer, err := h.ConnectToPeer(addr)
 		if err != nil {
-			builder.WriteString(err.Error())
+			builder.WriteString(err.Error() + "\n")
 			continue
 		}
+		builder.WriteString("connection success\n")
 		peers[peer.Addr] = peer
 	}
 	
@@ -79,20 +82,34 @@ func (h *Handle) Listen(port uint16) error {
 }
 
 func (h *Handle) Accept() (*Peer, error) {
-	conn, err := h.nm.Accept()
-	if err != nil {
-		return nil, err
-	}
-	p := newPeer(h.ctx, &conn)
-	h.Logger.Debug("Accepted new connection %s\n", p.Addr)
-	return p, nil
-}
+	connChan := make(chan transport.Conn)
+	errChan := make(chan error)
 
+	go func() {
+		conn, err := h.nm.Accept()
+		if err != nil {
+			errChan <- err
+			return
+		}
+		connChan <- conn
+	}()
+
+	select {
+	case <-h.ctx.Done():
+		return nil, h.ctx.Err()
+	case err := <- errChan:
+		return nil, err
+	case conn := <- connChan:
+		p := newPeer(h.ctx, &conn)
+		h.Logger.Debug("accepted new connection %s\n", p.Addr)
+		return p, nil
+	}
+}
 func (h *Handle) Close() error {
 	h.cancel()	
 	err := h.nm.Close()
-	h.nm = nil
-	h.Logger.Info("Closed peer listener\n")
+	h.Logger.Info("closed peer listener\n")
+	h.onDisconnect()
 	return err
 }
 
@@ -111,9 +128,8 @@ type Peer struct {
 	sendQ []*transport.Packet
 }
 
-const DisconnectedMessage string = "disconnected"
+const PeerDisconnected string = "disconnected"
 var handlerZeroValue func(*transport.Packet) = func(_ *transport.Packet) {}
-
 func newPeer(parentCtx context.Context, conn *transport.Conn) *Peer {
 	ctx, cancel := context.WithCancel(parentCtx)
 	return &Peer{
@@ -121,7 +137,7 @@ func newPeer(parentCtx context.Context, conn *transport.Conn) *Peer {
 		
 		sendQ: make([]*transport.Packet, 0),
 		handlers: map[string]func(*transport.Packet){
-			DisconnectedMessage: handlerZeroValue,
+			PeerDisconnected: handlerZeroValue,
 		},
 
 		ctx: ctx,
@@ -146,7 +162,7 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 				for _, packet := range p.sendQ {
 					nbw, err := conn.Write(packet)
 					if err != nil {
-						h.Logger.Warn("failed to send message to %s\n", p.Addr)
+						h.Logger.Error("failed to send message to %s\n", p.Addr)
 						continue
 					}
 					h.Logger.Debug("sent message of size %d to %s\n", nbw, p.Addr)
@@ -162,9 +178,7 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 		for {
 			select {
 			case <-p.ctx.Done():
-				p.handlersLock.Lock()
-				p.handlers[DisconnectedMessage](nil)
-				p.handlersLock.Unlock()
+				p.handlers[PeerDisconnected](nil)
 				return
 			case <-limitter:
 				packet, err := conn.Read()
@@ -178,11 +192,11 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 					continue // TODO: error
 				}
 
-				h.Logger.Debug("read message from %s\n", p.Addr)
+				h.Logger.Debug("read message of size %d from %s\n", packet.GetLen(), p.Addr)
 
 				handler, exists := p.handlers[msgType]
 				if !exists {
-					h.Logger.Error("invalid message type, handler doesn't exist from %s", p.Addr)
+					h.Logger.Warn("invalid message type, handler doesn't exist from %s", p.Addr)
 					continue
 				}
 
@@ -201,11 +215,13 @@ func (p *Peer) Send(msg string, packet *transport.Packet) error { // Need to reg
 	p.sendQLock.Unlock()
 	return nil
 }
+
 func (p *Peer) On(msg string, handler func(data *transport.Packet)) { // Needs read new packets from this peer
 	p.handlersLock.Lock()
 	p.handlers[msg] = handler
 	p.handlersLock.Unlock()
 }
+
 func (p *Peer) Disconnect() error {
 	p.ctxCancel()
 	return nil
@@ -214,8 +230,9 @@ func (p *Peer) Disconnect() error {
 /*
 
 Problems: 
-		What should you really do when a peer from a pool fails to connect?
-	  	Do retries if a connection doesn't want to be accepted
-	  	Why the fuck aren't you batching sent packets and add a pipeline or somthing for e2e
+		What should you really do when a peer from a pool fails to connect? reconnect
+		Do retries if a connection doesn't want to be accepted, let the user do that
+
+	  	Why the fuck aren't you batching sent packets and add a pipeline or somthing for e2e, out of context(besides the batching part which will need some sort of benchmarking)
 */
 
