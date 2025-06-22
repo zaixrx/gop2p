@@ -14,5 +14,13 @@
   {
     "Text": "implement an easy interface with broadcasting",
     "Done": false
+  },
+  {
+    "Text": "add templates for packets, and for gods sake make them easy to interacte with",
+    "Done": false
+  },
+  {
+    "Text": "I'm thinking to add some sort of checksum that uniquely identifies the sender's address tuple to prevent personality theft",
+    "Done": false
   }
 ]

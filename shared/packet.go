@@ -7,11 +7,9 @@ import (
 )
 
 type Packet struct {
-	consume bool
-	writeBefore bool
-
 	data []byte
 	offset uint32  
+	writeBefore bool
 }
 
 const str_sep string = " " 
@@ -27,7 +25,6 @@ func splitStr(str string) []string {
 
 func NewPacket() *Packet {
 	return &Packet{
-		consume: true,
 		writeBefore: false,
 		data: make([]byte, 0),
 		offset: 0,
@@ -36,11 +33,6 @@ func NewPacket() *Packet {
 
 func (p *Packet) GetLen() int {
 	return len(p.data)
-}
-func (p *Packet) SetConsume(val bool) bool {
-	old := p.consume
-	p.consume = val
-	return old
 }
 func (p *Packet) SetWriteBefore(val bool) {
 	p.writeBefore = val
@@ -51,6 +43,12 @@ func (p *Packet) Load(data []byte) {
 	copy(p.data, data)
 	p.offset = 0
 }
+func (p *Packet) GetOffset() uint32 {
+	return p.offset
+}
+func (p *Packet) SetOffset(val uint32) {
+	p.offset = val
+}
 func (p *Packet) Get(n uint32) ([]byte, error) {
 	length := uint32(len(p.data))
 	if length == 0 {
@@ -60,9 +58,7 @@ func (p *Packet) Get(n uint32) ([]byte, error) {
 		return nil, fmt.Errorf("ERROR: out of bound by %d elements", p.offset + n - length)
 	}
 	dat := p.data[p.offset : n + p.offset]
-	if p.consume {
-		p.offset += n
-	}
+	p.offset += n
 	return dat, nil
 }
 func (p *Packet) ReadByte() (byte, error) {
@@ -72,12 +68,26 @@ func (p *Packet) ReadByte() (byte, error) {
 	}
 	return dat[0], nil
 }
+func (p *Packet) ReadUInt16() (uint16, error) {
+	dat, err := p.Get(2)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint16(dat), nil 
+}
 func (p *Packet) ReadUInt32() (uint32, error) {
 	dat, err := p.Get(4)
 	if err != nil {
 		return 0, err
 	}
 	return binary.LittleEndian.Uint32(dat), nil
+}
+func (p *Packet) ReadUInt64() (uint64, error) {
+	dat, err := p.Get(8)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(dat), nil
 }
 func (p *Packet) ReadString() (string, error) {
 	n, err := p.ReadUInt32()
@@ -115,7 +125,7 @@ func (p *Packet) ReadPool() (*PublicPool, error) {
 }
 
 // TODO: Make read and write mode(packet is either for read or for writing)
-func (p *Packet) appnd (dat []byte) error {
+func (p *Packet) appnd(dat []byte) error {
 	if p.writeBefore {
 		p.data = append(dat, p.data...)
 	} else {
@@ -133,6 +143,15 @@ func (p *Packet) WriteBytes(dat []byte) error {
 	return nil
 }
 
+func getUint16(dat uint16) []byte {
+	buf := make([]byte, 4) // TODO: this is stupid bad
+	binary.LittleEndian.PutUint16(buf, dat)
+	return buf
+}
+func (p *Packet) WriteUint16(dat uint16) error {
+	return p.appnd(getUint16(dat))
+}
+
 func getUint32(dat uint32) []byte {
 	buf := make([]byte, 4) // TODO: this is stupid bad
 	binary.LittleEndian.PutUint32(buf, dat)
@@ -140,6 +159,15 @@ func getUint32(dat uint32) []byte {
 }
 func (p *Packet) WriteUint32(dat uint32) error {
 	return p.appnd(getUint32(dat))
+}
+
+func getUint64(dat uint64) []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint64(buf, dat)
+	return buf
+}
+func (p *Packet) WriteUint64(dat uint64) error {
+	return p.appnd(getUint64(dat))
 }
 
 func getString(dat string) []byte {

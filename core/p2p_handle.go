@@ -160,12 +160,16 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 				return
 			case <-limitter:
 				for _, packet := range p.sendQ {
+					msg, _ := packet.ReadString()
+					packet.SetOffset(0)
+
 					nbw, err := conn.Write(packet)
 					if err != nil {
 						h.Logger.Error("failed to send message to %s\n", p.Addr)
 						continue
 					}
-					h.Logger.Debug("sent message of size %d to %s\n", nbw, p.Addr)
+
+					h.Logger.Debug("sent message %s of size %d to %s\n", msg, nbw, p.Addr)
 				}
 				p.sendQ = p.sendQ[:0] 
 			}
@@ -191,8 +195,8 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 				if err != nil {
 					continue // TODO: error
 				}
-
-				h.Logger.Debug("read message of size %d from %s\n", packet.GetLen(), p.Addr)
+				
+				h.Logger.Debug("read message %s of size %d from %s\n", msgType, packet.GetLen(), p.Addr)
 
 				handler, exists := p.handlers[msgType]
 				if !exists {
@@ -209,10 +213,11 @@ func (h *Handle) HandlePeerIO(p *Peer) {
 func (p *Peer) Send(msg string, packet *transport.Packet) error { // Need to register sent messages and handle them in one go
 	packet.SetWriteBefore(true)
 	packet.WriteString(msg)
-	packet.SetWriteBefore(false)
+
 	p.sendQLock.Lock()
 	p.sendQ = append(p.sendQ, packet)
 	p.sendQLock.Unlock()
+
 	return nil
 }
 

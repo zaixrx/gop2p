@@ -17,6 +17,7 @@ type Transport interface {
 	Close() error
 }
 
+// must be thread safe!
 type Conn interface {
 	Write(*Packet) (int, error)
 	Read() (*Packet, error)
